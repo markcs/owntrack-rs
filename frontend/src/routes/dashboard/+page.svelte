@@ -187,6 +187,48 @@
             ? Math.max(...results.map((r) => r.days))
             : 0,
     );
+
+    const MONTHS = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    ];
+    const WEEKDAYS = [
+        "Sunday", "Monday", "Tuesday", "Wednesday",
+        "Thursday", "Friday", "Saturday",
+    ];
+
+    // Parse a YYYY-MM-DD string as a local calendar date (no TZ shift).
+    function parseLocalDate(s) {
+        const [y, m, d] = s.split("-").map(Number);
+        return new Date(y, m - 1, d);
+    }
+
+    // Flatten results into one row per individual date, for the detail table.
+    let dateRows = $derived.by(() => {
+        if (!results) return [];
+        const rows = [];
+        for (const r of results) {
+            for (const ds of r.dates) {
+                const d = parseLocalDate(ds);
+                rows.push({
+                    device: deviceLabel(r.device_id),
+                    area: r.polygon_name ?? `Area ${r.polygon_index + 1}`,
+                    month: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+                    date: ds,
+                    weekday: WEEKDAYS[d.getDay()],
+                    sortKey: ds,
+                });
+            }
+        }
+        // Sort by device, then area, then date ascending.
+        rows.sort(
+            (a, b) =>
+                a.device.localeCompare(b.device) ||
+                a.area.localeCompare(b.area) ||
+                a.sortKey.localeCompare(b.sortKey),
+        );
+        return rows;
+    });
 </script>
 
 <div class="dashboard">
@@ -344,6 +386,30 @@
                             </tbody>
                         </table>
                         <p class="hint">Hover a bar to see the exact days.</p>
+
+                        <h2 class="detail-heading">Days detail</h2>
+                        <table class="results detail">
+                            <thead>
+                                <tr>
+                                    <th>Device</th>
+                                    <th>Area</th>
+                                    <th>Month</th>
+                                    <th>Date</th>
+                                    <th>Day</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {#each dateRows as row}
+                                    <tr>
+                                        <td>{row.device}</td>
+                                        <td>{row.area}</td>
+                                        <td>{row.month}</td>
+                                        <td>{row.date}</td>
+                                        <td>{row.weekday}</td>
+                                    </tr>
+                                {/each}
+                            </tbody>
+                        </table>
                     {/if}
                 </section>
             {/if}
@@ -470,5 +536,13 @@
         background: #3388ff;
         border-radius: 2px;
         min-width: 2px;
+    }
+    .detail-heading {
+        margin-top: 16px;
+    }
+    .results.detail {
+        display: block;
+        max-height: 320px;
+        overflow-y: auto;
     }
 </style>

@@ -68,8 +68,25 @@
     <div class="title">Owntrack-rs</div>
     <div class="date-selector">
         <button onclick={() => setDate(addDays(date, -1))}> &lt; </button>
-        {datestr}
+        <input
+            type="date"
+            value={datestr}
+            onchange={(e) => {
+                if (e.target.value) {
+                    // Parse YYYY-MM-DD as a local calendar date.
+                    const [y, m, d] = e.target.value.split("-").map(Number);
+                    setDate(new Date(y, m - 1, d));
+                }
+            }}
+        />
         <button onclick={() => setDate(addDays(date, 1))}> &gt; </button>
+        <button
+            class="today"
+            onclick={() => setDate(new Date())}
+            disabled={isToday(date)}
+        >
+            Today
+        </button>
     </div>
     <a class="dashboard-link" href="{PUBLIC_BASE_URL}/dashboard">Dashboard</a>
 </div>
@@ -172,6 +189,26 @@
         display: flex;
         align-items: center;
         gap: 5px;
+    }
+
+    .date-selector input[type="date"] {
+        padding: 3px 5px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font: inherit;
+    }
+
+    .date-selector .today {
+        padding: 3px 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #f6f6f6;
+        cursor: pointer;
+    }
+
+    .date-selector .today:disabled {
+        opacity: 0.5;
+        cursor: default;
     }
 
     .dashboard-link {
