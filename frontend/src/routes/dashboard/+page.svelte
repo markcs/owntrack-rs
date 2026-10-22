@@ -41,6 +41,21 @@
     let devices = $state([]);
     let selectedDeviceIds = $state(new Set());
 
+    // --- Mode and weekday filter ---
+    // "inside": days a device had a fix inside a polygon.
+    // "outside": days a device was active but had no fix inside any polygon.
+    let mode = $state("inside");
+    // Weekday numbering matches the browser's Date.getDay(): 0 = Sunday .. 6 = Saturday.
+    // All selected by default; an empty set is sent as "all days".
+    let selectedWeekdays = $state(new Set([0, 1, 2, 3, 4, 5, 6]));
+
+    function toggleWeekday(i) {
+        const next = new Set(selectedWeekdays);
+        if (next.has(i)) next.delete(i);
+        else next.add(i);
+        selectedWeekdays = next;
+    }
+
     async function loadDevices() {
         const tz = utcOffsetMinutes(new Date());
         try {
@@ -155,12 +170,18 @@
             return;
         }
         loading = true;
+        // An all-selected or empty weekday set both mean "every day"; send []
+        // in those cases so the backend applies no filter.
+        const wd = [...selectedWeekdays].sort((a, b) => a - b);
+        const weekdays = wd.length === 7 ? [] : wd;
         const body = {
             date_from: dateFrom,
             date_to: dateTo,
             tz: utcOffsetMinutes(new Date()),
             device_ids: [...selectedDeviceIds],
             polygons: requestFeatureCollection(),
+            mode,
+            weekdays,
         };
         try {
             const res = await fetch(`${PUBLIC_BASE_URL}/metrics/days-in-area`, {
@@ -188,6 +209,10 @@
             : 0,
     );
 
+    let computeLabel = $derived(
+        mode === "outside" ? "Compute days NOT in area" : "Compute days in area",
+    );
+
     const MONTHS = [
         "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December",
@@ -196,10 +221,18 @@
         "Sunday", "Monday", "Tuesday", "Wednesday",
         "Thursday", "Friday", "Saturday",
     ];
+    // Short labels for the weekday filter checkboxes, in getDay() order.
+    const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     function parseLocalDate(s) {
         const [y, m, d] = s.split("-").map(Number);
         return new Date(y, m - 1, d);
+    }
+
+    // Label for the "area" column of a result row, depending on mode.
+    function areaLabel(r) {
+        if (mode === "outside") return "Outside all areas";
+        return r.polygon_name ?? `Area ${r.polygon_index + 1}`;
     }
 
     let dateRows = $derived.by(() => {
@@ -210,7 +243,7 @@
                 const d = parseLocalDate(ds);
                 rows.push({
                     device: deviceLabel(r.device_id),
-                    area: r.polygon_name ?? `Area ${r.polygon_index + 1}`,
+                    area: areaLabel(r),
                     month: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
                     date: ds,
                     weekday: WEEKDAYS[d.getDay()],
@@ -366,13 +399,66 @@
                     {/if}
                 </section>
 
+                <section class="ot-card">
+                    <h2>Calculation</h2>
+                    <div class="mode-group">
+                        <label class="ot-check">
+                            <input
+                                type="radio"
+                                name="mode"
+                                value="inside"
+                                checked={mode === "inside"}
+                                onchange={() => (mode = "inside")}
+                            />
+                            Days inside the polygon(s)
+                        </label>
+                        <label class="ot-check">
+                            <input
+                                type="radio"
+                                name="mode"
+                                value="outside"
+                                checked={mode === "outside"}
+                                onchange={() => (mode = "outside")}
+                            />
+                            Days NOT in the polygon(s)
+                        </label>
+                    </div>
+                    <p class="hint">
+                        {#if mode === "inside"}
+                            Counts days a device had at least one fix inside a
+                            polygon.
+                        {:else}
+                            Counts days a device was active (had a fix anywhere)
+                            but recorded no fix inside any polygon.
+                        {/if}
+                    </p>
+
+                    <h2 class="weekday-heading">Days of the week</h2>
+                    <p class="hint">
+                        Only selected weekdays are counted. Leave all selected
+                        to include every day.
+                    </p>
+                    <div class="weekday-group">
+                        {#each WEEKDAYS_SHORT as label, i}
+                            <label class="ot-check weekday">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedWeekdays.has(i)}
+                                    onchange={() => toggleWeekday(i)}
+                                />
+                                {label}
+                            </label>
+                        {/each}
+                    </div>
+                </section>
+
                 <section>
                     <button
                         class="button button-primary compute"
                         onclick={compute}
                         disabled={loading}
                     >
-                        {loading ? "Computing…" : "Compute days in area"}
+                        {loading ? "Computing…" : computeLabel}
                     </button>
                     {#if error}
                         <p class="error">{error}</p>
@@ -384,8 +470,13 @@
                         <h2>Results</h2>
                         {#if results.length === 0}
                             <p class="hint">
-                                No device had any fix inside the polygon(s) in
-                                this range.
+                                {#if mode === "outside"}
+                                    No device had an active day outside the
+                                    polygon(s) in this range.
+                                {:else}
+                                    No device had any fix inside the polygon(s)
+                                    in this range.
+                                {/if}
                             </p>
                         {:else}
                             <table class="results">
@@ -401,10 +492,7 @@
                                     {#each results as r}
                                         <tr>
                                             <td>{deviceLabel(r.device_id)}</td>
-                                            <td
-                                                >{r.polygon_name ??
-                                                    `Area ${r.polygon_index + 1}`}</td
-                                            >
+                                            <td>{areaLabel(r)}</td>
                                             <td class="days">{r.days}</td>
                                             <td class="bar-cell">
                                                 <div
@@ -525,6 +613,27 @@
     .device-list {
         max-height: 200px;
         overflow-y: auto;
+    }
+    .mode-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 6px;
+    }
+    .weekday-heading {
+        margin-top: 14px;
+    }
+    .weekday-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 6px;
+    }
+    label.weekday {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.9em;
     }
     label.device {
         display: flex;
