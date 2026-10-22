@@ -259,6 +259,43 @@
         );
         return rows;
     });
+
+    // --- CSV export ---
+    // Quote a value for CSV: wrap in double quotes and escape embedded quotes.
+    function csvCell(value) {
+        const s = value == null ? "" : String(value);
+        return `"${s.replace(/"/g, '""')}"`;
+    }
+
+    // Build a CSV of the per-day detail rows currently shown.
+    function buildCsv() {
+        const header = ["Device", "Area", "Month", "Date", "Day"];
+        const lines = [header.map(csvCell).join(",")];
+        for (const row of dateRows) {
+            lines.push(
+                [row.device, row.area, row.month, row.date, row.weekday]
+                    .map(csvCell)
+                    .join(","),
+            );
+        }
+        // Prepend a UTF-8 BOM so spreadsheets detect the encoding.
+        return "\ufeff" + lines.join("\r\n") + "\r\n";
+    }
+
+    function exportCsv() {
+        if (!dateRows.length) return;
+        const csv = buildCsv();
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const kind = mode === "outside" ? "days-not-in-area" : "days-in-area";
+        a.download = `${kind}_${dateFrom}_${dateTo}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
 </script>
 
 <div class="page">
@@ -467,7 +504,18 @@
 
                 {#if results}
                     <section class="ot-card">
-                        <h2>Results</h2>
+                        <div class="results-header">
+                            <h2>Results</h2>
+                            {#if results.length > 0}
+                                <button
+                                    class="button button-outline export-csv"
+                                    onclick={exportCsv}
+                                    title="Download the per-day detail as CSV"
+                                >
+                                    Export CSV
+                                </button>
+                            {/if}
+                        </div>
                         {#if results.length === 0}
                             <p class="hint">
                                 {#if mode === "outside"}
@@ -681,5 +729,19 @@
         display: block;
         max-height: 320px;
         overflow-y: auto;
+    }
+    .results-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .results-header h2 {
+        margin-bottom: 0;
+    }
+    .button.export-csv {
+        padding: 4px 12px;
+        font-size: 0.85em;
+        border: 1px solid var(--color-separator);
     }
 </style>
