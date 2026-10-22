@@ -2,7 +2,7 @@ name: Docker
 on:
   workflow_dispatch:
   push:
-    branches: [fix/local-time-display]
+    branches: ["**"]
 permissions:
   contents: read
   packages: write
@@ -16,8 +16,19 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Derive safe image tags from the branch name (slashes become dashes),
+      # and tag the default branch's build as `latest` as well.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/markcs/owntrack-rs
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/markcs/owntrack-rs:local-time-fix
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
