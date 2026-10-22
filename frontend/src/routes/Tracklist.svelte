@@ -1,4 +1,5 @@
 <script>
+    import "./owntracks-theme.css";
     import { PUBLIC_BASE_URL } from "$env/static/public";
     import {
         addDays,
@@ -64,14 +65,47 @@
     }
 </script>
 
-<div class="header">
-    <div class="title">Owntrack-rs</div>
-    <div class="date-selector">
-        <button onclick={() => setDate(addDays(date, -1))}> &lt; </button>
-        {datestr}
-        <button onclick={() => setDate(addDays(date, 1))}> &gt; </button>
+<header class="ot-header">
+    <span class="header-title">Owntrack-rs</span>
+    <div class="ot-nav-item date-selector">
+        <button
+            class="button button-outline"
+            onclick={() => setDate(addDays(date, -1))}
+        >
+            &lt;
+        </button>
+        <input
+            class="ot-date"
+            type="date"
+            value={datestr}
+            onchange={(e) => {
+                if (e.target.value) {
+                    // Parse YYYY-MM-DD as a local calendar date.
+                    const [y, m, d] = e.target.value.split("-").map(Number);
+                    setDate(new Date(y, m - 1, d));
+                }
+            }}
+        />
+        <button
+            class="button button-outline"
+            onclick={() => setDate(addDays(date, 1))}
+        >
+            &gt;
+        </button>
+        <button
+            class="button button-outline"
+            onclick={() => setDate(new Date())}
+            disabled={isToday(date)}
+        >
+            Today
+        </button>
     </div>
-</div>
+    <div class="ot-nav-item header-right">
+        <a class="button button-flat" href="{PUBLIC_BASE_URL}/dashboard">
+            Dashboard
+        </a>
+    </div>
+</header>
 
 <div class="tracks-container">
     {#await loader}
@@ -155,22 +189,18 @@
 </div>
 
 <style>
-    .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+    .ot-header {
         margin-bottom: 10px;
-    }
-
-    .title {
-        font-weight: bold;
-        font-size: 1.2em;
+        border-radius: 8px;
     }
 
     .date-selector {
-        display: flex;
-        align-items: center;
-        gap: 5px;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .date-selector .button {
+        padding: 6px 12px;
     }
 
     .tracks-table {
@@ -207,15 +237,15 @@
     }
 
     .tracks-table tr.selected {
-        background-color: lightblue;
+        background-color: #e3e6f5;
     }
 
     .tracks-table tr.selected:hover {
-        background-color: #a8d4e6;
+        background-color: #d2d7ef;
     }
 
     .tracks-table tr.selected:focus {
-        background-color: #a8d4e6;
+        background-color: #d2d7ef;
     }
 
     .dropdown-cell {

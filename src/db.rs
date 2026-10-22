@@ -41,6 +41,17 @@ pub fn local_date(utc_ts: &str, tz_minutes: i32) -> anyhow::Result<NaiveDate> {
     Ok(utc.with_timezone(&local_tz).date_naive())
 }
 
+/// Local calendar date of a UTC epoch-second timestamp.
+pub fn local_date_from_epoch(epoch: i64, tz_minutes: i32) -> anyhow::Result<NaiveDate> {
+    let local_tz = tz_minutes
+        .checked_mul(60)
+        .and_then(FixedOffset::east_opt)
+        .ok_or_else(|| anyhow::anyhow!("timezone offset out of range: {tz_minutes} minutes"))?;
+    let utc = DateTime::from_timestamp(epoch, 0)
+        .ok_or_else(|| anyhow::anyhow!("timestamp out of range: {epoch}"))?;
+    Ok(utc.with_timezone(&local_tz).date_naive())
+}
+
 /// Format a UTC timestamp as `2025-02-19 06:46:54+00`, the format used by the API.
 fn utc_stamp(ts: &str) -> String {
     if ts.ends_with("+00") {
@@ -88,6 +99,18 @@ pub struct DevicePosition {
     /// Vertical accuracy in meters
     pub v_accuracy: Option<i16>,
     pub cog: Option<i16>,
+}
+
+/// A single position fix, used for spatial metrics over a date range.
+#[derive(sqlx::FromRow, Debug)]
+pub struct RangePoint {
+    pub device_id: i32,
+    pub y: f64,
+    pub x: f64,
+    /// Fix time in epoch seconds (UTC).
+    pub ts: i64,
+    /// Accuracy in meters
+    pub accuracy: Option<i32>,
 }
 
 #[derive(sqlx::FromRow, Serialize, Debug)]
@@ -320,6 +343,50 @@ impl Db {
         }
 
         Ok(positions)
+    }
+
+    /// Return all position fixes in the epoch-second window `[start, end)`,
+    /// optionally restricted to the given device ids. Bounded by time.
+    pub async fn query_positions_in_range(
+        &self,
+        start: i64,
+        end: i64,
+        device_ids: Option<&[i32]>,
+    ) -> anyhow::Result<Vec<RangePoint>> {
+        // device_ids are i32 read from the DB / validated query params, so
+        // interpolating them into an IN clause is injection-safe. The Any
+        // driver has no portable array-binding, so we build the list inline.
+        let device_filter = match device_ids {
+            Some(ids) if !ids.is_empty() => {
+                let list = ids
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("AND device_id IN ({list})")
+            }
+            _ => String::new(),
+        };
+        let sql = format!(
+            r#"
+            SELECT
+                device_id,
+                lat as y,
+                lon as x,
+                ts,
+                accuracy
+            FROM positions
+            WHERE ts >= $1 AND ts < $2
+            {device_filter}
+            ORDER BY ts
+            "#
+        );
+        let points: Vec<RangePoint> = sqlx::query_as(&sql)
+            .bind(start)
+            .bind(end)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(points)
     }
 
     /// Check validity of invite
