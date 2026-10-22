@@ -1,5 +1,6 @@
 <script>
     import "../global.css";
+    import "../owntracks-theme.css";
     import {
         MapLibre,
         NavigationControl,
@@ -9,6 +10,8 @@
         LineLayer,
         CircleLayer,
     } from "svelte-maplibre-gl";
+    import maplibregl from "maplibre-gl";
+    const { LngLatBounds } = maplibregl;
     import "maplibre-gl/dist/maplibre-gl.css";
     import { PUBLIC_BASE_URL } from "$env/static/public";
     import { isoDateString, utcOffsetMinutes, addDays } from "../datetime.js";
@@ -19,9 +22,22 @@
     let dateFrom = $state(isoDateString(addDays(new Date(), -30)));
     let dateTo = $state(isoDateString(new Date()));
 
+    // Range shortcut presets, matching the official OwnTracks frontend.
+    const shortcuts = [
+        { label: "Today", days: 0 },
+        { label: "7 days", days: 7 },
+        { label: "15 days", days: 15 },
+        { label: "30 days", days: 30 },
+        { label: "3 months", days: 90 },
+        { label: "6 months", days: 182 },
+        { label: "1 year", days: 365 },
+    ];
+    function applyShortcut(days) {
+        dateTo = isoDateString(new Date());
+        dateFrom = isoDateString(addDays(new Date(), -days));
+    }
+
     // --- Devices ---
-    // Populated from /trackinfos for the end date; the user may also just
-    // leave all selected to query every device.
     let devices = $state([]);
     let selectedDeviceIds = $state(new Set());
 
@@ -32,7 +48,6 @@
                 `${PUBLIC_BASE_URL}/trackinfos?date=${dateTo}&tz=${tz}`,
             );
             const json = await res.json();
-            // De-duplicate by device_id.
             const seen = new Map();
             for (const t of json) {
                 if (!seen.has(t.device_id)) {
@@ -50,7 +65,6 @@
     }
 
     $effect(() => {
-        // reload device list whenever the end date changes
         dateTo;
         loadDevices();
     });
@@ -63,30 +77,23 @@
     }
 
     // --- Polygon drawing ---
-    // Click to add vertices; "Finish polygon" closes the current ring and
-    // starts a new one. Polygons are stored as arrays of [lon, lat].
-    let polygons = $state([]); // finished polygons: [[lon,lat], ...]
-    let current = $state([]); // vertices of the polygon being drawn
+    let polygons = $state([]);
+    let current = $state([]);
     let drawing = $state(false);
 
     function onMapClick(ev) {
         if (!drawing) return;
         current = [...current, [ev.lngLat.lng, ev.lngLat.lat]];
     }
-
     function startDrawing() {
         drawing = true;
         current = [];
     }
-
     function finishPolygon() {
-        if (current.length >= 3) {
-            polygons = [...polygons, current];
-        }
+        if (current.length >= 3) polygons = [...polygons, current];
         current = [];
         drawing = false;
     }
-
     function clearPolygons() {
         polygons = [];
         current = [];
@@ -95,21 +102,14 @@
         error = null;
     }
 
-    // GeoJSON for rendering drawn polygons (closed rings) + current vertices.
-    let drawGeoJSON = $derived.by(() => {
-        const features = [];
-        polygons.forEach((ring, i) => {
-            features.push({
-                type: "Feature",
-                properties: { name: `Area ${i + 1}` },
-                geometry: {
-                    type: "Polygon",
-                    coordinates: [[...ring, ring[0]]],
-                },
-            });
-        });
-        return { type: "FeatureCollection", features };
-    });
+    let drawGeoJSON = $derived.by(() => ({
+        type: "FeatureCollection",
+        features: polygons.map((ring, i) => ({
+            type: "Feature",
+            properties: { name: `Area ${i + 1}` },
+            geometry: { type: "Polygon", coordinates: [[...ring, ring[0]]] },
+        })),
+    }));
 
     let currentGeoJSON = $derived.by(() => ({
         type: "FeatureCollection",
@@ -120,7 +120,6 @@
         })),
     }));
 
-    // FeatureCollection sent to the backend (named "Area N").
     function requestFeatureCollection() {
         return {
             type: "FeatureCollection",
@@ -133,6 +132,14 @@
                 },
             })),
         };
+    }
+
+    // Fit the map to the drawn polygons.
+    function fitView() {
+        if (!map || polygons.length === 0) return;
+        const bounds = new LngLatBounds();
+        for (const ring of polygons) for (const c of ring) bounds.extend(c);
+        map.fitBounds(bounds, { padding: 40 });
     }
 
     // --- Compute ---
@@ -156,19 +163,13 @@
             polygons: requestFeatureCollection(),
         };
         try {
-            const res = await fetch(
-                `${PUBLIC_BASE_URL}/metrics/days-in-area`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body),
-                },
-            );
-            if (!res.ok) {
-                throw new Error(await res.text());
-            }
-            const json = await res.json();
-            results = json.results;
+            const res = await fetch(`${PUBLIC_BASE_URL}/metrics/days-in-area`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) throw new Error(await res.text());
+            results = (await res.json()).results;
         } catch (e) {
             error = e.message || String(e);
         } finally {
@@ -181,7 +182,6 @@
         return d ? d.label : `device ${id}`;
     }
 
-    // Max day count, for scaling the bar chart.
     let maxDays = $derived(
         results && results.length
             ? Math.max(...results.map((r) => r.days))
@@ -197,13 +197,11 @@
         "Thursday", "Friday", "Saturday",
     ];
 
-    // Parse a YYYY-MM-DD string as a local calendar date (no TZ shift).
     function parseLocalDate(s) {
         const [y, m, d] = s.split("-").map(Number);
         return new Date(y, m - 1, d);
     }
 
-    // Flatten results into one row per individual date, for the detail table.
     let dateRows = $derived.by(() => {
         if (!results) return [];
         const rows = [];
@@ -220,7 +218,6 @@
                 });
             }
         }
-        // Sort by device, then area, then date ascending.
         rows.sort(
             (a, b) =>
                 a.device.localeCompare(b.device) ||
@@ -231,208 +228,239 @@
     });
 </script>
 
-<div class="dashboard">
-    <header>
-        <h1>Spatial metrics dashboard</h1>
-        <a class="back" href="{PUBLIC_BASE_URL}/">&larr; Back to map</a>
+<div class="page">
+    <header class="ot-header">
+        <span class="header-title">Spatial metrics dashboard</span>
+        <div class="ot-nav-item">
+            {#if !drawing}
+                <button class="button button-outline" onclick={startDrawing}>
+                    Draw polygon
+                </button>
+            {:else}
+                <button class="button button-outline" onclick={finishPolygon}>
+                    Finish polygon ({current.length} pts)
+                </button>
+            {/if}
+            <button class="button button-outline" onclick={clearPolygons}>
+                Clear all
+            </button>
+            <button
+                class="button button-outline"
+                onclick={fitView}
+                title="Fit the map to the drawn polygons"
+            >
+                Fit view
+            </button>
+        </div>
+        <div class="ot-nav-item header-right">
+            <a class="button button-flat" href="{PUBLIC_BASE_URL}/">
+                &larr; Back to map
+            </a>
+        </div>
     </header>
 
-    <div class="layout">
-        <div class="map-col">
-            <div class="draw-toolbar">
-                {#if !drawing}
-                    <button onclick={startDrawing}>Draw polygon</button>
-                {:else}
-                    <button onclick={finishPolygon}
-                        >Finish polygon ({current.length} pts)</button
-                    >
-                {/if}
-                <button onclick={clearPolygons}>Clear all</button>
-                <span class="hint">
+    <main>
+        <div class="layout">
+            <div class="map-col">
+                <p class="draw-hint">
                     {#if drawing}
                         Click on the map to add points, then "Finish polygon".
                     {:else}
                         {polygons.length} polygon(s) drawn.
                     {/if}
-                </span>
-            </div>
-            <div class="map-wrap">
-                <MapLibre
-                    class="map"
-                    bind:map
-                    autoloadGlobalCss={false}
-                    style="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"
-                    center={[0, 20]}
-                    zoom={1}
-                    onclick={onMapClick}
-                >
-                    <NavigationControl />
-                    <ScaleControl />
-                    <GeoJSONSource data={drawGeoJSON}>
-                        <FillLayer
-                            paint={{
-                                "fill-color": "#3388ff",
-                                "fill-opacity": 0.25,
-                            }}
-                        />
-                        <LineLayer
-                            paint={{
-                                "line-color": "#3388ff",
-                                "line-width": 2,
-                            }}
-                        />
-                    </GeoJSONSource>
-                    <GeoJSONSource data={currentGeoJSON}>
-                        <CircleLayer
-                            paint={{
-                                "circle-color": "#ff6600",
-                                "circle-radius": 4,
-                            }}
-                        />
-                    </GeoJSONSource>
-                </MapLibre>
-            </div>
-        </div>
-
-        <div class="controls-col">
-            <section>
-                <h2>Date range</h2>
-                <label>
-                    From
-                    <input type="date" bind:value={dateFrom} />
-                </label>
-                <label>
-                    To
-                    <input type="date" bind:value={dateTo} />
-                </label>
-            </section>
-
-            <section>
-                <h2>Devices</h2>
-                <p class="hint">
-                    Leave all unchecked to include every device.
                 </p>
-                {#if devices.length === 0}
-                    <p class="hint">No devices found for the end date.</p>
-                {:else}
-                    <div class="device-list">
-                        {#each devices as d}
-                            <label class="device">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedDeviceIds.has(
-                                        d.device_id,
-                                    )}
-                                    onchange={() => toggleDevice(d.device_id)}
-                                />
-                                {d.label}
-                            </label>
+                <div class="map-wrap">
+                    <MapLibre
+                        class="dash-map"
+                        bind:map
+                        autoloadGlobalCss={false}
+                        style="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"
+                        center={[0, 20]}
+                        zoom={1}
+                        onclick={onMapClick}
+                    >
+                        <NavigationControl />
+                        <ScaleControl />
+                        <GeoJSONSource data={drawGeoJSON}>
+                            <FillLayer
+                                paint={{
+                                    "fill-color": "#3f51b5",
+                                    "fill-opacity": 0.2,
+                                }}
+                            />
+                            <LineLayer
+                                paint={{
+                                    "line-color": "#3f51b5",
+                                    "line-width": 2,
+                                }}
+                            />
+                        </GeoJSONSource>
+                        <GeoJSONSource data={currentGeoJSON}>
+                            <CircleLayer
+                                paint={{
+                                    "circle-color": "#ff6600",
+                                    "circle-radius": 4,
+                                }}
+                            />
+                        </GeoJSONSource>
+                    </MapLibre>
+                </div>
+            </div>
+
+            <div class="controls-col">
+                <section class="ot-card">
+                    <h2>Date range</h2>
+                    <div class="date-inputs">
+                        <label>
+                            From
+                            <input
+                                class="ot-date"
+                                type="date"
+                                bind:value={dateFrom}
+                            />
+                        </label>
+                        <label>
+                            To
+                            <input
+                                class="ot-date"
+                                type="date"
+                                bind:value={dateTo}
+                            />
+                        </label>
+                    </div>
+                    <div class="shortcuts">
+                        {#each shortcuts as s}
+                            <button
+                                class="button shortcut"
+                                onclick={() => applyShortcut(s.days)}
+                            >
+                                {s.label}
+                            </button>
                         {/each}
                     </div>
-                {/if}
-            </section>
+                </section>
 
-            <section>
-                <button
-                    class="compute"
-                    onclick={compute}
-                    disabled={loading}
-                >
-                    {loading ? "Computing…" : "Compute days in area"}
-                </button>
-                {#if error}
-                    <p class="error">{error}</p>
-                {/if}
-            </section>
-
-            {#if results}
-                <section>
-                    <h2>Results</h2>
-                    {#if results.length === 0}
-                        <p class="hint">
-                            No device had any fix inside the polygon(s) in this
-                            range.
-                        </p>
+                <section class="ot-card">
+                    <h2>Devices</h2>
+                    <p class="hint">
+                        Leave all unchecked to include every device.
+                    </p>
+                    {#if devices.length === 0}
+                        <p class="hint">No devices found for the end date.</p>
                     {:else}
-                        <table class="results">
-                            <thead>
-                                <tr>
-                                    <th>Device</th>
-                                    <th>Area</th>
-                                    <th>Days</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {#each results as r}
-                                    <tr>
-                                        <td>{deviceLabel(r.device_id)}</td>
-                                        <td
-                                            >{r.polygon_name ??
-                                                `Area ${r.polygon_index + 1}`}</td
-                                        >
-                                        <td class="days">{r.days}</td>
-                                        <td class="bar-cell">
-                                            <div
-                                                class="bar"
-                                                style="width: {maxDays
-                                                    ? (r.days / maxDays) * 100
-                                                    : 0}%"
-                                                title={r.dates.join(", ")}
-                                            ></div>
-                                        </td>
-                                    </tr>
-                                {/each}
-                            </tbody>
-                        </table>
-                        <p class="hint">Hover a bar to see the exact days.</p>
-
-                        <h2 class="detail-heading">Days detail</h2>
-                        <table class="results detail">
-                            <thead>
-                                <tr>
-                                    <th>Device</th>
-                                    <th>Area</th>
-                                    <th>Month</th>
-                                    <th>Date</th>
-                                    <th>Day</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {#each dateRows as row}
-                                    <tr>
-                                        <td>{row.device}</td>
-                                        <td>{row.area}</td>
-                                        <td>{row.month}</td>
-                                        <td>{row.date}</td>
-                                        <td>{row.weekday}</td>
-                                    </tr>
-                                {/each}
-                            </tbody>
-                        </table>
+                        <div class="device-list">
+                            {#each devices as d}
+                                <label class="ot-check device">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedDeviceIds.has(
+                                            d.device_id,
+                                        )}
+                                        onchange={() =>
+                                            toggleDevice(d.device_id)}
+                                    />
+                                    {d.label}
+                                </label>
+                            {/each}
+                        </div>
                     {/if}
                 </section>
-            {/if}
+
+                <section>
+                    <button
+                        class="button button-primary compute"
+                        onclick={compute}
+                        disabled={loading}
+                    >
+                        {loading ? "Computing…" : "Compute days in area"}
+                    </button>
+                    {#if error}
+                        <p class="error">{error}</p>
+                    {/if}
+                </section>
+
+                {#if results}
+                    <section class="ot-card">
+                        <h2>Results</h2>
+                        {#if results.length === 0}
+                            <p class="hint">
+                                No device had any fix inside the polygon(s) in
+                                this range.
+                            </p>
+                        {:else}
+                            <table class="results">
+                                <thead>
+                                    <tr>
+                                        <th>Device</th>
+                                        <th>Area</th>
+                                        <th>Days</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {#each results as r}
+                                        <tr>
+                                            <td>{deviceLabel(r.device_id)}</td>
+                                            <td
+                                                >{r.polygon_name ??
+                                                    `Area ${r.polygon_index + 1}`}</td
+                                            >
+                                            <td class="days">{r.days}</td>
+                                            <td class="bar-cell">
+                                                <div
+                                                    class="bar"
+                                                    style="width: {maxDays
+                                                        ? (r.days / maxDays) *
+                                                          100
+                                                        : 0}%"
+                                                    title={r.dates.join(", ")}
+                                                ></div>
+                                            </td>
+                                        </tr>
+                                    {/each}
+                                </tbody>
+                            </table>
+
+                            <h2 class="detail-heading">Days detail</h2>
+                            <table class="results detail">
+                                <thead>
+                                    <tr>
+                                        <th>Device</th>
+                                        <th>Area</th>
+                                        <th>Month</th>
+                                        <th>Date</th>
+                                        <th>Day</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {#each dateRows as row}
+                                        <tr>
+                                            <td>{row.device}</td>
+                                            <td>{row.area}</td>
+                                            <td>{row.month}</td>
+                                            <td>{row.date}</td>
+                                            <td>{row.weekday}</td>
+                                        </tr>
+                                    {/each}
+                                </tbody>
+                            </table>
+                        {/if}
+                    </section>
+                {/if}
+            </div>
         </div>
-    </div>
+    </main>
 </div>
 
 <style>
-    .dashboard {
-        padding: 16px;
-    }
-    header {
+    .page {
+        min-height: 100vh;
         display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        margin-bottom: 12px;
+        flex-direction: column;
     }
-    h1 {
-        font-size: 1.4em;
-    }
-    .back {
-        text-decoration: none;
-        color: #3388ff;
+    main {
+        flex: 1;
+        padding: 20px;
     }
     .layout {
         display: flex;
@@ -445,66 +473,66 @@
     }
     .controls-col {
         flex: 1;
-        min-width: 280px;
-    }
-    .draw-toolbar {
+        min-width: 300px;
         display: flex;
-        align-items: center;
-        gap: 8px;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .draw-hint {
+        color: #666;
+        font-size: 0.9em;
         margin-bottom: 8px;
-        flex-wrap: wrap;
     }
     .map-wrap {
-        height: 480px;
+        height: 520px;
         width: 100%;
     }
-    :global(.map) {
+    :global(.dash-map) {
         height: 100%;
         width: 100%;
-    }
-    section {
-        margin-bottom: 18px;
+        border-radius: 8px;
+        overflow: hidden;
     }
     h2 {
         font-size: 1.05em;
-        margin-bottom: 6px;
+        margin-bottom: 10px;
     }
-    label {
-        display: block;
-        margin-bottom: 6px;
+    .date-inputs {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .date-inputs label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 0.9em;
+    }
+    .shortcuts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .button.shortcut {
+        padding: 5px 12px;
+        font-size: 0.85em;
+        border: 1px solid var(--color-separator);
+    }
+    .button.shortcut:hover {
+        background: #eef0fb;
     }
     .device-list {
-        max-height: 180px;
+        max-height: 200px;
         overflow-y: auto;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        padding: 6px;
     }
     label.device {
         display: flex;
         align-items: center;
-        gap: 6px;
-        margin-bottom: 2px;
-    }
-    button {
-        cursor: pointer;
-        padding: 6px 12px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        background: #f6f6f6;
-    }
-    button:hover {
-        background: #ececec;
+        margin-bottom: 4px;
     }
     .compute {
-        background: #3388ff;
-        color: white;
-        border-color: #2277ee;
-        font-weight: bold;
-    }
-    .compute:disabled {
-        opacity: 0.6;
-        cursor: default;
+        width: 100%;
     }
     .hint {
         color: #666;
@@ -522,7 +550,7 @@
     .results td {
         text-align: left;
         padding: 6px 8px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--color-separator);
     }
     .results .days {
         font-weight: bold;
@@ -533,7 +561,7 @@
     }
     .bar {
         height: 12px;
-        background: #3388ff;
+        background: var(--color-primary);
         border-radius: 2px;
         min-width: 2px;
     }

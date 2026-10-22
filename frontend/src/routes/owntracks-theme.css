@@ -1,0 +1,157 @@
+/* OwnTracks-frontend-inspired design language.
+ * Tokens and component classes adapted from
+ * https://github.com/owntracks/frontend (MIT, Linus Groh). */
+
+:root {
+    --color-text: #333;
+    --color-background: #fff;
+    --color-primary: #3f51b5;
+    --color-primary-text: #fff;
+    --color-separator: #ddd;
+    --drop-shadow: drop-shadow(0 10px 10px rgb(0, 0, 0, 0.2));
+}
+
+/* Header bar: full width, indigo, white text. */
+.ot-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 16px 20px;
+    white-space: nowrap;
+    color: var(--color-primary-text);
+    background: var(--color-primary);
+}
+
+.ot-header .header-title {
+    font-weight: 600;
+    font-size: 1.15em;
+}
+
+.ot-header .header-grow {
+    flex: 1;
+}
+
+.ot-header .header-right {
+    margin-left: auto;
+}
+
+.ot-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Pill buttons. */
+.button {
+    cursor: pointer;
+    color: var(--color-text);
+    background: var(--color-background);
+    border: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    padding: 8px 16px;
+    font: inherit;
+    text-overflow: ellipsis;
+    transition: box-shadow 0.2s;
+    white-space: nowrap;
+}
+
+.button:focus {
+    outline: none;
+    box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+.button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.button.button-primary {
+    color: var(--color-primary-text);
+    background: var(--color-primary);
+}
+
+.button.button-outline {
+    border: 1px solid var(--color-background);
+    color: var(--color-primary-text);
+    background: transparent;
+    transition:
+        background-color 0.2s,
+        box-shadow 0.2s;
+}
+
+.button.button-outline:hover,
+.button.button-outline:focus {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.button.button-flat {
+    color: var(--color-primary-text);
+    background: transparent;
+}
+
+.button.button-flat:hover,
+.button.button-flat:focus {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Custom indigo checkboxes. */
+.ot-check input[type="checkbox"] {
+    appearance: none;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 6px;
+    position: relative;
+    vertical-align: top;
+}
+
+.ot-check input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.2);
+}
+
+.ot-check input[type="checkbox"]::before {
+    border: 2px solid var(--color-primary);
+    border-radius: 4px;
+    content: "";
+    display: block;
+    height: 16px;
+    width: 16px;
+}
+
+.ot-check input[type="checkbox"]:checked::before {
+    background: var(--color-primary);
+}
+
+.ot-check input[type="checkbox"]:checked::after {
+    border-bottom: 2px solid var(--color-primary-text);
+    border-right: 2px solid var(--color-primary-text);
+    content: "";
+    display: inline-block;
+    height: 10px;
+    left: 6px;
+    position: absolute;
+    top: 2px;
+    transform: rotate(45deg);
+    width: 4px;
+}
+
+/* Date inputs styled as light pills. */
+.ot-date {
+    padding: 7px 12px;
+    border: 1px solid var(--color-separator);
+    border-radius: 18px;
+    font: inherit;
+    color: var(--color-text);
+    background: var(--color-background);
+}
+
+/* Card panels. */
+.ot-card {
+    background: var(--color-background);
+    border: 1px solid var(--color-separator);
+    border-radius: 8px;
+    padding: 16px;
+}
