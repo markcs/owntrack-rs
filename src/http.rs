@@ -1,6 +1,7 @@
 use crate::db::{Db, TrackRef};
 use crate::geojson;
 use crate::gpx;
+use crate::metrics::{self, DaysInAreaRequest};
 use crate::owntracks::{otrc_json, AppConfig, Message};
 use actix_cors::Cors;
 use actix_web::{
@@ -295,6 +296,20 @@ async fn otrc(db: web::Data<Db>, req: HttpRequest) -> actix_web::Result<impl Res
     Ok(web::Json(otrc))
 }
 
+/// Spatial metric: distinct days each device spent inside the given polygon(s).
+async fn days_in_area(
+    db: web::Data<Db>,
+    req: web::Json<DaysInAreaRequest>,
+) -> actix_web::Result<impl Responder> {
+    match metrics::days_in_area(&db, &req).await {
+        Ok(resp) => Ok(web::Json(resp)),
+        Err(e) => {
+            log::error!("days-in-area failed: {e}");
+            Err(error::ErrorBadRequest(e.to_string()))
+        }
+    }
+}
+
 #[derive(RustEmbed)]
 #[folder = "./static/"]
 struct Embed;
@@ -305,6 +320,7 @@ async fn serve_assets(path: web::Path<String>) -> EmbedResponse<EmbedableFileRes
     let path = match path.as_str() {
         "" => "index.html",
         "setup" => "setup.html",
+        "dashboard" => "dashboard.html",
         p => p,
     };
     Embed::get(path).into_response()
@@ -351,6 +367,13 @@ pub async fn webserver(db: Db) -> std::io::Result<()> {
             .service(trackpoints)
             .service(positions)
             .service(otrc)
+            // Polygon payloads exceed the default 4 KiB JSON limit, so this
+            // route gets its own extractor config with a larger limit.
+            .service(
+                web::resource("/metrics/days-in-area")
+                    .app_data(web::JsonConfig::default().limit(1024 * 1024))
+                    .route(web::post().to(days_in_area)),
+            )
             .service(serve_assets)
     })
     .bind(bind_addr)?

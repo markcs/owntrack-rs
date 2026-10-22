@@ -3,6 +3,7 @@ mod geojson;
 mod gpx;
 mod http;
 mod meshtastic;
+mod metrics;
 mod mqtt;
 mod owntracks;
 mod position;

@@ -71,6 +71,7 @@
         {datestr}
         <button onclick={() => setDate(addDays(date, 1))}> &gt; </button>
     </div>
+    <a class="dashboard-link" href="{PUBLIC_BASE_URL}/dashboard">Dashboard</a>
 </div>
 
 <div class="tracks-container">
@@ -171,6 +172,16 @@
         display: flex;
         align-items: center;
         gap: 5px;
+    }
+
+    .dashboard-link {
+        text-decoration: none;
+        color: #3388ff;
+        font-weight: bold;
+    }
+
+    .dashboard-link:hover {
+        text-decoration: underline;
     }
 
     .tracks-table {
