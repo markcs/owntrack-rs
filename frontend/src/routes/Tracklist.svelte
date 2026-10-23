@@ -55,6 +55,16 @@
         );
     }
 
+    // Clicking a row selects its track; clicking the already-selected row
+    // again deselects it, hiding the details panel.
+    function toggleTrack(track) {
+        if (checkSelected(track)) {
+            setCurTrack(null);
+        } else {
+            setCurTrack(track);
+        }
+    }
+
     let track_dropdown = $state(null);
 
     function toggleDropdown(device_id, event) {
@@ -151,7 +161,7 @@
                     {#each tracks as track}
                         <tr
                             class={checkSelected(track) ? "selected" : ""}
-                            onclick={() => setCurTrack(track)}
+                            onclick={() => toggleTrack(track)}
                         >
                             <td>{track.user_id}</td>
                             <td>{track.device}</td>
