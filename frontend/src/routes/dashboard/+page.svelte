@@ -315,16 +315,17 @@
 </script>
 
 <div class="page">
-    <header class="ot-header">
-        <span class="header-title">Spatial metrics dashboard</span>
-        <div class="ot-nav-item">
+    <header class="ot-appbar">
+        <span class="ot-title">Spatial metrics dashboard</span>
+        <span class="ot-grow"></span>
+        <div class="appbar-actions">
             {#if !drawing}
                 <button class="button button-outline" onclick={startDrawing}>
                     Draw polygon
                 </button>
             {:else}
                 <button class="button button-outline" onclick={finishPolygon}>
-                    Finish polygon ({current.length} pts)
+                    Finish ({current.length} pts)
                 </button>
             {/if}
             <button class="button button-outline" onclick={clearPolygons}>
@@ -337,8 +338,6 @@
             >
                 Fit view
             </button>
-        </div>
-        <div class="ot-nav-item header-right">
             <a class="button button-flat" href="{PUBLIC_BASE_URL}/">
                 &larr; Back to map
             </a>
@@ -370,13 +369,13 @@
                         <GeoJSONSource data={drawGeoJSON}>
                             <FillLayer
                                 paint={{
-                                    "fill-color": "#3f51b5",
+                                    "fill-color": "#1a237e",
                                     "fill-opacity": 0.2,
                                 }}
                             />
                             <LineLayer
                                 paint={{
-                                    "line-color": "#3f51b5",
+                                    "line-color": "#1a237e",
                                     "line-width": 2,
                                 }}
                             />
@@ -621,14 +620,22 @@
         min-height: 100vh;
         display: flex;
         flex-direction: column;
+        background: var(--color-background-default);
+    }
+    .appbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
     }
     main {
         flex: 1;
-        padding: 20px;
+        padding: 16px;
     }
     .layout {
         display: flex;
-        gap: 20px;
+        gap: 16px;
         flex-wrap: wrap;
     }
     .map-col {
@@ -643,9 +650,9 @@
         gap: 16px;
     }
     .draw-hint {
-        color: #666;
-        font-size: 0.9em;
-        margin-bottom: 8px;
+        color: var(--color-text-secondary);
+        font-size: 0.8125rem;
+        margin: 0 0 8px;
     }
     .map-wrap {
         height: 520px;
@@ -654,12 +661,15 @@
     :global(.dash-map) {
         height: 100%;
         width: 100%;
-        border-radius: 8px;
+        border-radius: var(--radius);
         overflow: hidden;
+        box-shadow: var(--shadow-1);
     }
     h2 {
-        font-size: 1.05em;
-        margin-bottom: 10px;
+        font-size: 0.9375rem;
+        font-weight: 500;
+        margin: 0 0 10px;
+        color: var(--color-text);
     }
     .date-inputs {
         display: flex;
@@ -671,7 +681,19 @@
         display: flex;
         flex-direction: column;
         gap: 4px;
-        font-size: 0.9em;
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        flex: 1 1 130px;
+        min-width: 0;
+    }
+    /* Keep the native date control from overflowing its column so the
+       end ("To") date is never clipped. */
+    .date-inputs .ot-date {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        font-size: 0.8125rem;
+        padding: 7px 10px;
     }
     .shortcuts {
         display: flex;
@@ -679,16 +701,22 @@
         gap: 6px;
     }
     .button.shortcut {
-        padding: 5px 12px;
-        font-size: 0.85em;
-        border: 1px solid var(--color-separator);
+        min-width: 0;
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        text-transform: none;
+        border: 1px solid var(--color-divider);
+        color: var(--color-text);
     }
     .button.shortcut:hover {
-        background: #eef0fb;
+        background: var(--color-action-selected);
     }
     .device-list {
         max-height: 200px;
         overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
     }
     .mode-group {
         display: flex;
@@ -702,43 +730,46 @@
     .weekday-group {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 8px 12px;
         margin-top: 6px;
     }
     label.weekday {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 0.9em;
+        font-size: 0.8125rem;
     }
     label.device {
-        display: flex;
-        align-items: center;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
     }
     .compute {
         width: 100%;
     }
     .hint {
-        color: #666;
-        font-size: 0.85em;
+        color: var(--color-text-secondary);
+        font-size: 0.75rem;
+        margin: 4px 0;
     }
     .error {
-        color: #c00;
+        color: #d32f2f;
         margin-top: 8px;
+        font-size: 0.8125rem;
     }
     .results {
         width: 100%;
         border-collapse: collapse;
+        font-size: 0.8125rem;
     }
     .results th,
     .results td {
         text-align: left;
         padding: 6px 8px;
-        border-bottom: 1px solid var(--color-separator);
+        border-bottom: 1px solid var(--color-divider);
+        color: var(--color-text);
+    }
+    .results th {
+        color: var(--color-text-secondary);
+        font-weight: 500;
     }
     .results .days {
-        font-weight: bold;
+        font-weight: 700;
         text-align: right;
     }
     .bar-cell {
@@ -769,14 +800,14 @@
     }
     .button.export-csv {
         padding: 4px 12px;
-        font-size: 0.85em;
+        font-size: 0.75rem;
         color: var(--color-primary);
         background: transparent;
         border: 1px solid var(--color-primary);
     }
     .button.export-csv:hover,
     .button.export-csv:focus {
-        color: var(--color-primary-text);
+        color: var(--color-primary-contrast);
         background: var(--color-primary);
     }
     .track-link {
@@ -787,5 +818,33 @@
     .track-link:hover,
     .track-link:focus {
         text-decoration: underline;
+    }
+
+    /* Mobile: the map stacks above a more compact control column so the
+       device grid and weekday checkboxes don't dominate the screen. */
+    @media (max-width: 768px) {
+        main {
+            padding: 10px;
+        }
+        .layout {
+            gap: 12px;
+        }
+        .map-wrap {
+            height: 300px;
+        }
+        .controls-col {
+            min-width: 0;
+        }
+        .device-list {
+            max-height: 128px;
+        }
+        .results.detail {
+            max-height: 240px;
+        }
+        .appbar-actions .button {
+            min-width: 0;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+        }
     }
 </style>

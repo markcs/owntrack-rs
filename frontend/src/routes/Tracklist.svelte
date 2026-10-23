@@ -229,6 +229,32 @@
         flex: 0 0 auto;
         box-shadow: none;
         border-bottom: 1px solid var(--color-divider);
+        flex-wrap: nowrap;
+    }
+
+    /* Let the date input shrink to fit the 360px sidebar so the year at the
+       end of the value is never clipped. */
+    .sidebar-toolbar .ot-date {
+        flex: 1 1 auto;
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 0.8125rem;
+        padding: 7px 8px;
+    }
+
+    .sidebar-toolbar .ot-date:focus {
+        padding: 6px 7px;
+    }
+
+    .sidebar-toolbar .button {
+        flex: 0 0 auto;
+        min-width: 0;
+        padding: 6px 10px;
+    }
+
+    .sidebar-toolbar .ot-icon-button {
+        flex: 0 0 auto;
     }
 
     .tracks-container {

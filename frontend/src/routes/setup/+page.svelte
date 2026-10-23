@@ -29,13 +29,12 @@
 </script>
 
 <div class="page">
-    <header class="ot-header">
-        <span class="header-title">Setup</span>
-        <div class="ot-nav-item header-right">
-            <a class="button button-flat" href="{PUBLIC_BASE_URL}/">
-                &larr; Back to map
-            </a>
-        </div>
+    <header class="ot-appbar">
+        <span class="ot-title">Setup</span>
+        <span class="ot-grow"></span>
+        <a class="button button-flat" href="{PUBLIC_BASE_URL}/">
+            &larr; Back to map
+        </a>
     </header>
 
     <main>
@@ -77,6 +76,7 @@
         min-height: 100vh;
         display: flex;
         flex-direction: column;
+        background: var(--color-background-default);
     }
     main {
         flex: 1;
@@ -91,17 +91,17 @@
         gap: 10px;
         margin-top: 12px;
     }
-    .button {
-        border: 1px solid var(--color-separator);
+    .setup-actions .button {
+        border: 1px solid var(--color-divider);
         text-decoration: none;
     }
-    .button.button-primary {
+    .setup-actions .button.button-primary {
         border-color: var(--color-primary);
     }
     .hint {
-        color: #666;
+        color: var(--color-text-secondary);
     }
     .error {
-        color: #c00;
+        color: #d32f2f;
     }
 </style>
