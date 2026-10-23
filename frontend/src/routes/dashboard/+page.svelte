@@ -621,6 +621,7 @@
         display: flex;
         flex-direction: column;
         background: var(--color-background-default);
+        overflow-x: hidden;
     }
     .appbar-actions {
         display: flex;
@@ -826,20 +827,34 @@
         main {
             padding: 10px;
         }
+        /* Stack the map above the controls and let both take the full
+           viewport width so nothing overflows horizontally. */
         .layout {
+            flex-direction: column;
+            flex-wrap: nowrap;
             gap: 12px;
+        }
+        .map-col,
+        .controls-col {
+            flex: none;
+            width: 100%;
+            min-width: 0;
         }
         .map-wrap {
             height: 300px;
-        }
-        .controls-col {
-            min-width: 0;
         }
         .device-list {
             max-height: 128px;
         }
         .results.detail {
             max-height: 240px;
+        }
+        /* Results tables can be wide; let them scroll sideways instead of
+           stretching the page. */
+        .results {
+            display: block;
+            overflow-x: auto;
+            white-space: nowrap;
         }
         .appbar-actions .button {
             min-width: 0;
