@@ -158,6 +158,48 @@
         map.fitBounds(bounds, { padding: 40 });
     }
 
+    // Center the map on the most recently received device location(s), at a
+    // sensible zoom — same behaviour as the main viewer. The /positions
+    // endpoint returns the latest fix per device for a given local day, so we
+    // look at the end date first and walk back a few days to find the most
+    // recent day that has data.
+    async function fitToLatest() {
+        if (!map) return;
+        const tz = utcOffsetMinutes(new Date());
+        const end = parseLocalDate(dateTo);
+        for (let back = 0; back <= 14; back++) {
+            const day = isoDateString(addDays(end, -back));
+            try {
+                const res = await fetch(
+                    `${PUBLIC_BASE_URL}/positions?date=${day}&tz=${tz}`,
+                );
+                if (!res.ok) continue;
+                const fc = await res.json();
+                if (!fc.features || fc.features.length === 0) continue;
+                if (fc.bbox && fc.bbox.length === 4) {
+                    const bounds = new LngLatBounds(
+                        [fc.bbox[0], fc.bbox[1]],
+                        [fc.bbox[2], fc.bbox[3]],
+                    );
+                    // Cap the zoom so a single point doesn't zoom in too far.
+                    map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
+                }
+                return;
+            } catch (e) {
+                // Try the previous day.
+            }
+        }
+    }
+
+    // On first map load, default the view to the latest received location.
+    let didFitLatest = false;
+    $effect(() => {
+        if (map && !didFitLatest) {
+            didFitLatest = true;
+            fitToLatest();
+        }
+    });
+
     // --- Compute ---
     let loading = $state(false);
     let results = $state(null);
