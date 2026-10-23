@@ -55,117 +55,91 @@
     }
 </script>
 
-<div class="container">
-    <div class="top-section">
-        <div class="left-column">
-            <div class="map-section">
-                <div class="map-title">
+<!-- Traccar-style layout: a full-bleed map with a floating sidebar on top.
+     The sidebar holds an AppBar-style header (rendered by Tracklist), the
+     scrollable track list (also Tracklist) and, when a track is selected,
+     its title and stats. -->
+<div class="app-root">
+    <div class="map-layer">
+        <Map {curTrack} {trackpoints} {positionsSelector} {setCurTrack} />
+    </div>
+
+    <aside class="sidebar">
+        <Tracklist
+            {date}
+            {curTrack}
+            {setDate}
+            {setCurTrack}
+            {preselectDeviceId}
+        >
+            {#if curTrack}
+                <div class="sidebar-title ot-paper ot-paper--square">
                     <Tracktitle {curTrack} />
                 </div>
-                <div class="map-container">
-                    <Map
-                        {curTrack}
-                        {trackpoints}
-                        {positionsSelector}
-                        {setCurTrack}
-                    />
-                </div>
-            </div>
+            {/if}
+        </Tracklist>
 
-            <div class="trackinfo-container">
+        {#if curTrack}
+            <div class="sidebar-info ot-paper">
                 <Trackinfo {curTrack} {setTrackpoints} />
             </div>
-        </div>
-
-        <div class="tracklist-container">
-            <Tracklist {date} {curTrack} {setDate} {setCurTrack} {preselectDeviceId} />
-        </div>
-    </div>
+        {/if}
+    </aside>
 </div>
 
 <style>
-    * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
+    .app-root {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
     }
 
-    .container {
-        width: 100%;
-        margin: 0 auto;
+    /* Map fills the whole viewport, behind the sidebar. */
+    .map-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+    }
+
+    /* Floating sidebar column over the map (MUI MainPage pattern). */
+    .sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 3;
         display: flex;
         flex-direction: column;
+        width: var(--drawer-width);
+        max-height: calc(100% - 24px);
+        margin: 12px;
+        gap: 0;
+        pointer-events: none;
     }
 
-    .top-section {
-        display: flex;
-        flex-wrap: wrap;
-        width: 100%;
+    .sidebar-title {
+        pointer-events: auto;
+        padding: 10px 16px;
+        box-shadow: none;
+        border-bottom: 1px solid var(--color-divider);
+        font-size: 0.875rem;
+        color: var(--color-text-secondary);
     }
 
-    .left-column {
-        flex: 1;
-        min-width: 300px;
-        padding-right: 20px;
-        display: flex;
-        flex-direction: column;
+    .sidebar-info {
+        pointer-events: auto;
+        flex: 0 0 auto;
+        padding: 4px 16px;
+        margin-top: 12px;
+        border-radius: var(--radius);
     }
 
-    .map-title {
-        margin-bottom: 6px;
-    }
-
-    .map-section {
-        width: 100%;
-        position: relative;
-        margin-bottom: 20px;
-    }
-
-    .map-container {
-        width: 100%;
-    }
-
-    .trackinfo-container {
-        width: 100%;
-        margin-bottom: 20px;
-    }
-
-    .tracklist-container {
-        flex: 1;
-        min-width: 300px;
-        max-height: calc(
-            100vh - 40px
-        ); /* Limit to screen height minus some padding */
-        overflow-y: auto; /* Make it scrollable */
-        padding-right: 10px; /* Add some padding to accommodate scrollbar */
-    }
-
+    /* On small screens the sidebar takes the full width, like Traccar. */
     @media (max-width: 768px) {
-        .container {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .top-section {
-            flex-direction: column;
-        }
-
-        .left-column {
+        .sidebar {
             width: 100%;
-            padding-right: 0;
-            margin-bottom: 20px;
-        }
-
-        .map-section {
-            width: 100%;
-            margin-bottom: 20px;
-        }
-
-        .tracklist-container {
-            width: 100%;
-            margin-bottom: 20px;
-            max-height: 400px; /* Limit height on mobile */
-            overflow-y: auto;
+            max-height: 100%;
+            margin: 0;
+            gap: 0;
         }
     }
 </style>

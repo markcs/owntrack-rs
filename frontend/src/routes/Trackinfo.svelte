@@ -19,26 +19,60 @@
 {#await loader then trackpoints}
     {#if trackpoints && curTrack}
         {@const track = trackpoints.stats}
-        <ul>
-            <li>tid: <b>{curTrack.tid}</b></li>
-            <li>User: {curTrack.user_id}</li>
-            <li>Device: {curTrack.device}</li>
-            <li>Distance: {(track.distance / 1000).toFixed(1)} km</li>
-            <li>
-                Speed: {track.min_speed}-{track.max_speed} (Ø {Math.round(
+        <dl class="stats">
+            <dt>tid</dt>
+            <dd><b>{curTrack.tid}</b></dd>
+            <dt>User</dt>
+            <dd>{curTrack.user_id}</dd>
+            <dt>Device</dt>
+            <dd>{curTrack.device}</dd>
+            <dt>Distance</dt>
+            <dd>{(track.distance / 1000).toFixed(1)} km</dd>
+            <dt>Speed</dt>
+            <dd>
+                {track.min_speed}–{track.max_speed} (Ø {Math.round(
                     track.mean_speed,
                 )}) km/h
-            </li>
-            <li>
-                Altitude: {track.min_elevation}-{track.max_elevation} (Ø {Math.round(
+            </dd>
+            <dt>Altitude</dt>
+            <dd>
+                {track.min_elevation}–{track.max_elevation} (Ø {Math.round(
                     track.mean_elevation,
-                )}) müM
-            </li>
-            <li>
-                Elevation: ↗{track.elevation_up}m ↘{track.elevation_down}m
-            </li>
-        </ul>
+                )}) m
+            </dd>
+            <dt>Elevation</dt>
+            <dd>↗{track.elevation_up} m ↘{track.elevation_down} m</dd>
+        </dl>
     {/if}
 {:catch error}
-    <p style="color: red">{error.message}</p>
+    <p class="error">{error.message}</p>
 {/await}
+
+<style>
+    .stats {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 16px;
+        margin: 0;
+        padding: 8px 0;
+        font-size: 0.875rem;
+    }
+
+    .stats dt {
+        color: var(--color-text-secondary);
+        white-space: nowrap;
+    }
+
+    .stats dd {
+        margin: 0;
+        color: var(--color-text);
+        text-align: right;
+    }
+
+    .error {
+        margin: 0;
+        padding: 8px 0;
+        color: #d32f2f;
+        font-size: 0.875rem;
+    }
+</style>

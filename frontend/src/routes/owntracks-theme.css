@@ -1,157 +1,251 @@
-/* OwnTracks-frontend-inspired design language.
- * Tokens and component classes adapted from
- * https://github.com/owntracks/frontend (MIT, Linus Groh). */
+/* Material Design theme tokens adapted from the Traccar web app
+ * (https://github.com/traccar/traccar-web, Apache-2.0). Reproduces the MUI
+ * look — indigo primary, Roboto, Paper cards with elevation shadows, and
+ * MUI-style buttons, inputs and tables — as plain CSS so the existing Svelte
+ * viewer keeps all its functionality. */
 
 :root {
-    --color-text: #333;
-    --color-background: #fff;
-    --color-primary: #3f51b5;
-    --color-primary-text: #fff;
-    --color-separator: #ddd;
-    --drop-shadow: drop-shadow(0 10px 10px rgb(0, 0, 0, 0.2));
+    --ot-font: Roboto, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+    /* MUI indigo[900] / green[800] (light mode). */
+    --color-primary: #1a237e;
+    --color-primary-hover: #283593;
+    --color-primary-contrast: #fff;
+    --color-secondary: #2e7d32;
+
+    --color-text: rgba(0, 0, 0, 0.87);
+    --color-text-secondary: rgba(0, 0, 0, 0.6);
+    --color-text-disabled: rgba(0, 0, 0, 0.38);
+
+    /* MUI grey[50] page background, white Paper surfaces. */
+    --color-background-default: #fafafa;
+    --color-paper: #fff;
+    --color-divider: rgba(0, 0, 0, 0.12);
+    --color-action-hover: rgba(0, 0, 0, 0.04);
+    --color-action-selected: rgba(26, 35, 126, 0.08);
+    --color-action-selected-hover: rgba(26, 35, 126, 0.12);
+
+    /* MUI elevation shadows. */
+    --shadow-1: 0 2px 1px -1px rgba(0, 0, 0, 0.2),
+        0 1px 1px 0 rgba(0, 0, 0, 0.14), 0 1px 3px 0 rgba(0, 0, 0, 0.12);
+    --shadow-3: 0 3px 3px -2px rgba(0, 0, 0, 0.2),
+        0 3px 4px 0 rgba(0, 0, 0, 0.14), 0 1px 8px 0 rgba(0, 0, 0, 0.12);
+    --shadow-8: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
+        0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12);
+
+    --radius: 4px;
+    --drawer-width: 360px;
 }
 
-/* Header bar: full width, indigo, white text. */
-.ot-header {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 20px;
-    padding: 16px 20px;
-    white-space: nowrap;
-    color: var(--color-primary-text);
-    background: var(--color-primary);
+@media (prefers-color-scheme: dark) {
+    :root {
+        /* MUI indigo[200] / green[200] on grey[900] in dark mode. */
+        --color-primary: #9fa8da;
+        --color-primary-hover: #b4bbe3;
+        --color-primary-contrast: rgba(0, 0, 0, 0.87);
+        --color-secondary: #a5d6a7;
+
+        --color-text: #fff;
+        --color-text-secondary: rgba(255, 255, 255, 0.7);
+        --color-text-disabled: rgba(255, 255, 255, 0.5);
+
+        --color-background-default: #212121;
+        --color-paper: #424242;
+        --color-divider: rgba(255, 255, 255, 0.12);
+        --color-action-hover: rgba(255, 255, 255, 0.08);
+        --color-action-selected: rgba(159, 168, 218, 0.16);
+        --color-action-selected-hover: rgba(159, 168, 218, 0.24);
+    }
 }
 
-.ot-header .header-title {
-    font-weight: 600;
-    font-size: 1.15em;
+/* ---- Paper surface (MUI <Paper>) ---- */
+.ot-paper {
+    background: var(--color-paper);
+    color: var(--color-text);
+    box-shadow: var(--shadow-1);
+    border-radius: var(--radius);
 }
 
-.ot-header .header-grow {
-    flex: 1;
+.ot-paper--elevated {
+    box-shadow: var(--shadow-3);
 }
 
-.ot-header .header-right {
-    margin-left: auto;
+.ot-paper--square {
+    border-radius: 0;
 }
 
-.ot-nav-item {
+/* ---- AppBar / Toolbar (MUI primary app bar) ---- */
+.ot-appbar {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-height: 56px;
+    padding: 4px 12px;
+    color: var(--color-primary-contrast);
+    background: var(--color-primary);
+    box-shadow: var(--shadow-3);
 }
 
-/* Pill buttons. */
-.button {
-    cursor: pointer;
-    color: var(--color-text);
-    background: var(--color-background);
-    border: 0;
-    border-radius: 18px;
-    overflow: hidden;
-    padding: 8px 16px;
-    font: inherit;
-    text-overflow: ellipsis;
-    transition: box-shadow 0.2s;
+.ot-appbar .ot-title {
+    font-size: 1.125rem;
+    font-weight: 500;
+    letter-spacing: 0.0075em;
+    margin-right: 8px;
     white-space: nowrap;
 }
 
-.button:focus {
-    outline: none;
-    box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.2);
+.ot-appbar .ot-grow {
+    flex: 1;
 }
 
-.button:disabled {
-    opacity: 0.5;
-    cursor: default;
+.ot-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px;
 }
 
-.button.button-primary {
-    color: var(--color-primary-text);
-    background: var(--color-primary);
-}
-
-.button.button-outline {
-    border: 1px solid var(--color-background);
-    color: var(--color-primary-text);
+/* ---- Buttons (MUI) ---- */
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 500;
+    font-size: 0.875rem;
+    line-height: 1.75;
+    letter-spacing: 0.02857em;
+    text-transform: uppercase;
+    text-decoration: none;
+    min-width: 64px;
+    padding: 6px 16px;
+    border: 0;
+    border-radius: var(--radius);
+    color: var(--color-primary);
     background: transparent;
     transition:
         background-color 0.2s,
-        box-shadow 0.2s;
+        box-shadow 0.2s,
+        border-color 0.2s;
+    white-space: nowrap;
 }
 
-.button.button-outline:hover,
-.button.button-outline:focus {
-    background: rgba(0, 0, 0, 0.2);
+.button:hover {
+    background: var(--color-action-selected);
 }
 
-.button.button-flat {
-    color: var(--color-primary-text);
+.button:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+}
+
+.button:disabled {
+    color: var(--color-text-disabled);
+    cursor: default;
     background: transparent;
 }
 
-.button.button-flat:hover,
-.button.button-flat:focus {
-    background: rgba(0, 0, 0, 0.2);
-}
-
-/* Custom indigo checkboxes. */
-.ot-check input[type="checkbox"] {
-    appearance: none;
-    border: 0;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-right: 6px;
-    position: relative;
-    vertical-align: top;
-}
-
-.ot-check input[type="checkbox"]:focus {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.2);
-}
-
-.ot-check input[type="checkbox"]::before {
-    border: 2px solid var(--color-primary);
-    border-radius: 4px;
-    content: "";
-    display: block;
-    height: 16px;
-    width: 16px;
-}
-
-.ot-check input[type="checkbox"]:checked::before {
+/* Contained (filled) variant. */
+.button.button-primary {
+    color: var(--color-primary-contrast);
     background: var(--color-primary);
+    box-shadow: var(--shadow-1);
 }
 
-.ot-check input[type="checkbox"]:checked::after {
-    border-bottom: 2px solid var(--color-primary-text);
-    border-right: 2px solid var(--color-primary-text);
-    content: "";
-    display: inline-block;
-    height: 10px;
-    left: 6px;
-    position: absolute;
-    top: 2px;
-    transform: rotate(45deg);
-    width: 4px;
+.button.button-primary:hover {
+    background: var(--color-primary-hover);
+    box-shadow: var(--shadow-3);
 }
 
-/* Date inputs styled as light pills. */
-.ot-date {
-    padding: 7px 12px;
-    border: 1px solid var(--color-separator);
-    border-radius: 18px;
+.button.button-primary:disabled {
+    color: var(--color-text-disabled);
+    background: var(--color-divider);
+    box-shadow: none;
+}
+
+/* Outlined variant — used on the primary app bar (contrast border). */
+.button.button-outline {
+    color: var(--color-primary-contrast);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: transparent;
+    padding: 5px 15px;
+}
+
+.button.button-outline:hover {
+    border-color: var(--color-primary-contrast);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.button.button-outline:disabled {
+    color: rgba(255, 255, 255, 0.5);
+    border-color: rgba(255, 255, 255, 0.2);
+    background: transparent;
+}
+
+/* Text variant on the app bar (e.g. Dashboard link). */
+.button.button-flat {
+    color: var(--color-primary-contrast);
+    background: transparent;
+}
+
+.button.button-flat:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Icon button (MUI IconButton) — square, circular ripple area. */
+.ot-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 6px;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: var(--color-text-secondary);
+    background: transparent;
+    transition: background-color 0.2s;
+}
+
+.ot-icon-button:hover {
+    background: var(--color-action-hover);
+}
+
+/* ---- Outlined text / date input (MUI OutlinedInput, small) ---- */
+.ot-date,
+.ot-input {
+    padding: 8.5px 14px;
     font: inherit;
+    font-size: 0.875rem;
     color: var(--color-text);
-    background: var(--color-background);
+    background: var(--color-paper);
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius);
+    transition: border-color 0.2s;
 }
 
-/* Card panels. */
+.ot-date:hover,
+.ot-input:hover {
+    border-color: var(--color-text);
+}
+
+.ot-date:focus,
+.ot-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    border-width: 2px;
+    padding: 7.5px 13px;
+}
+
+/* ---- Card ---- */
 .ot-card {
-    background: var(--color-background);
-    border: 1px solid var(--color-separator);
-    border-radius: 8px;
+    background: var(--color-paper);
+    color: var(--color-text);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-1);
     padding: 16px;
 }

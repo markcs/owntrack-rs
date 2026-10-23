@@ -10,7 +10,8 @@
         utcToLocalTime,
     } from "./datetime.js";
 
-    let { date, curTrack, setDate, setCurTrack, preselectDeviceId } = $props();
+    let { date, curTrack, setDate, setCurTrack, preselectDeviceId, children } =
+        $props();
     let datestr = $derived(isoDateString(date));
     let loader = $derived(load_infos());
 
@@ -79,234 +80,257 @@
     }
 </script>
 
-<header class="ot-header">
-    <span class="header-title">Owntrack-rs</span>
-    <div class="ot-nav-item date-selector">
-        <button
-            class="button button-outline"
-            onclick={() => setDate(addDays(date, -1))}
-        >
-            &lt;
-        </button>
-        <input
-            class="ot-date"
-            type="date"
-            value={datestr}
-            onchange={(e) => {
-                if (e.target.value) {
-                    // Parse YYYY-MM-DD as a local calendar date.
-                    const [y, m, d] = e.target.value.split("-").map(Number);
-                    setDate(new Date(y, m - 1, d));
-                }
-            }}
-        />
-        <button
-            class="button button-outline"
-            onclick={() => setDate(addDays(date, 1))}
-        >
-            &gt;
-        </button>
-        <button
-            class="button button-outline"
-            onclick={() => setDate(new Date())}
-            disabled={isToday(date)}
-        >
-            Today
-        </button>
-    </div>
-    <div class="ot-nav-item header-right">
-        <a class="button button-flat" href="{PUBLIC_BASE_URL}/dashboard">
-            Dashboard
-        </a>
-    </div>
+<!-- AppBar-style header (MUI primary app bar). -->
+<header class="ot-appbar sidebar-header">
+    <span class="ot-title">Owntrack-rs</span>
+    <span class="ot-grow"></span>
+    <a class="button button-flat" href="{PUBLIC_BASE_URL}/dashboard">
+        Dashboard
+    </a>
 </header>
 
-<div class="tracks-container">
+<!-- Date navigation toolbar. -->
+<div class="ot-toolbar sidebar-toolbar ot-paper ot-paper--square">
+    <button
+        class="ot-icon-button"
+        aria-label="Previous day"
+        onclick={() => setDate(addDays(date, -1))}
+    >
+        &#x2039;
+    </button>
+    <input
+        class="ot-date"
+        type="date"
+        value={datestr}
+        onchange={(e) => {
+            if (e.target.value) {
+                // Parse YYYY-MM-DD as a local calendar date.
+                const [y, m, d] = e.target.value.split("-").map(Number);
+                setDate(new Date(y, m - 1, d));
+            }
+        }}
+    />
+    <button
+        class="ot-icon-button"
+        aria-label="Next day"
+        onclick={() => setDate(addDays(date, 1))}
+    >
+        &#x203a;
+    </button>
+    <span class="ot-grow"></span>
+    <button
+        class="button"
+        onclick={() => setDate(new Date())}
+        disabled={isToday(date)}
+    >
+        Today
+    </button>
+</div>
+
+{@render children?.()}
+
+<!-- Scrollable track list (MUI table inside the Paper surface). -->
+<div class="tracks-container ot-paper ot-paper--square">
     {#await loader}
-        <p>loading track list...</p>
+        <p class="tracks-placeholder">Loading track list…</p>
     {:then tracks}
-        <table class="tracks-table">
-            <thead>
-                <tr>
-                    <th>User</th>
-                    <th>Device</th>
-                    <th>Start Time</th>
-                    <th>End Time</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {#each tracks as track}
-                    <tr
-                        class={checkSelected(track) ? "selected" : ""}
-                        onclick={() => setCurTrack(track)}
-                    >
-                        <td>{track.user_id}</td>
-                        <td>{track.device}</td>
-                        <td>{utcToLocalTime(track.ts_start)}</td>
-                        <td>{utcToLocalTime(track.ts_end)}</td>
-                        <td class="dropdown-cell">
-                            <button
-                                class="dropdown-button"
-                                onclick={(e) =>
-                                    toggleDropdown(track.device_id, e)}
-                                >☰
-                            </button>
-                            {#if track_dropdown === track.device_id}
-                                <div class="dropdown-menu">
-                                    <a
-                                        href="{PUBLIC_BASE_URL}/gpxtrack?{trackQuery(
-                                            track,
-                                        )}"
-                                        class="dropdown-item"
-                                        onclick={(e) => {
-                                            e.stopPropagation();
-                                            closeDropdown();
-                                        }}
-                                    >
-                                        Download GPX
-                                    </a>
-                                    <a
-                                        href="{PUBLIC_BASE_URL}/track?{trackQuery(
-                                            track,
-                                        )}"
-                                        class="dropdown-item"
-                                        onclick={(e) => {
-                                            e.stopPropagation();
-                                            closeDropdown();
-                                        }}
-                                    >
-                                        Download GeoJSON
-                                    </a>
-                                    <a
-                                        href="{PUBLIC_BASE_URL}/csvtrack?{trackQuery(
-                                            track,
-                                        )}"
-                                        class="dropdown-item"
-                                        onclick={(e) => {
-                                            e.stopPropagation();
-                                            closeDropdown();
-                                        }}
-                                    >
-                                        Download CSV
-                                    </a>
-                                </div>
-                            {/if}
-                        </td>
+        {#if tracks.length === 0}
+            <p class="tracks-placeholder">No tracks for this day.</p>
+        {:else}
+            <table class="tracks-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Device</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th aria-label="Actions"></th>
                     </tr>
-                {/each}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    {#each tracks as track}
+                        <tr
+                            class={checkSelected(track) ? "selected" : ""}
+                            onclick={() => setCurTrack(track)}
+                        >
+                            <td>{track.user_id}</td>
+                            <td>{track.device}</td>
+                            <td>{utcToLocalTime(track.ts_start)}</td>
+                            <td>{utcToLocalTime(track.ts_end)}</td>
+                            <td class="dropdown-cell">
+                                <button
+                                    class="ot-icon-button dropdown-button"
+                                    aria-label="Track actions"
+                                    onclick={(e) =>
+                                        toggleDropdown(track.device_id, e)}
+                                    >&#x22ee;
+                                </button>
+                                {#if track_dropdown === track.device_id}
+                                    <div class="dropdown-menu ot-paper ot-paper--elevated">
+                                        <a
+                                            href="{PUBLIC_BASE_URL}/gpxtrack?{trackQuery(
+                                                track,
+                                            )}"
+                                            class="dropdown-item"
+                                            onclick={(e) => {
+                                                e.stopPropagation();
+                                                closeDropdown();
+                                            }}
+                                        >
+                                            Download GPX
+                                        </a>
+                                        <a
+                                            href="{PUBLIC_BASE_URL}/track?{trackQuery(
+                                                track,
+                                            )}"
+                                            class="dropdown-item"
+                                            onclick={(e) => {
+                                                e.stopPropagation();
+                                                closeDropdown();
+                                            }}
+                                        >
+                                            Download GeoJSON
+                                        </a>
+                                        <a
+                                            href="{PUBLIC_BASE_URL}/csvtrack?{trackQuery(
+                                                track,
+                                            )}"
+                                            class="dropdown-item"
+                                            onclick={(e) => {
+                                                e.stopPropagation();
+                                                closeDropdown();
+                                            }}
+                                        >
+                                            Download CSV
+                                        </a>
+                                    </div>
+                                {/if}
+                            </td>
+                        </tr>
+                    {/each}
+                </tbody>
+            </table>
+        {/if}
     {:catch error}
-        <p style="color: red">{error.message}</p>
+        <p class="tracks-error">{error.message}</p>
     {/await}
 </div>
 
 <style>
-    .ot-header {
-        margin-bottom: 10px;
-        border-radius: 8px;
+    .sidebar-header {
+        pointer-events: auto;
+        flex: 0 0 auto;
+        border-top-left-radius: var(--radius);
+        border-top-right-radius: var(--radius);
     }
 
-    .date-selector {
-        gap: 6px;
-        flex-wrap: wrap;
+    .sidebar-toolbar {
+        pointer-events: auto;
+        flex: 0 0 auto;
+        box-shadow: none;
+        border-bottom: 1px solid var(--color-divider);
     }
 
-    .date-selector .button {
-        padding: 6px 12px;
+    .tracks-container {
+        pointer-events: auto;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        box-shadow: none;
+        padding: 0;
+        border-bottom-left-radius: var(--radius);
+        border-bottom-right-radius: var(--radius);
+    }
+
+    .tracks-placeholder {
+        margin: 0;
+        padding: 16px;
+        color: var(--color-text-secondary);
+        font-size: 0.875rem;
+    }
+
+    .tracks-error {
+        margin: 0;
+        padding: 16px;
+        color: #d32f2f;
+        font-size: 0.875rem;
     }
 
     .tracks-table {
         width: 100%;
         border-collapse: collapse;
-        overflow-x: auto;
-        overflow-y: visible;
+        font-size: 0.875rem;
     }
 
     .tracks-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
         text-align: left;
-        padding: 8px;
-        /* background-color: #f2f2f2; */
-        border-bottom: 1px solid #ddd;
-        font-weight: bold;
+        padding: 10px 12px;
+        color: var(--color-text-secondary);
+        background: var(--color-paper);
+        border-bottom: 1px solid var(--color-divider);
+        font-weight: 500;
+        white-space: nowrap;
     }
 
     .tracks-table td {
-        padding: 8px;
-        border-bottom: 1px solid #eee;
+        padding: 10px 12px;
+        color: var(--color-text);
+        border-bottom: 1px solid var(--color-divider);
+        white-space: nowrap;
     }
 
-    .tracks-table tr {
-        transition: background-color 0.2s;
-    }
-
-    .tracks-table tr:hover {
-        background-color: #f0f0f0;
+    .tracks-table tbody tr {
         cursor: pointer;
+        transition: background-color 0.15s;
     }
 
-    .tracks-table tr:focus {
-        background-color: #f0f0f0;
+    .tracks-table tbody tr:hover {
+        background-color: var(--color-action-hover);
     }
 
-    .tracks-table tr.selected {
-        background-color: #e3e6f5;
+    .tracks-table tbody tr.selected {
+        background-color: var(--color-action-selected);
     }
 
-    .tracks-table tr.selected:hover {
-        background-color: #d2d7ef;
-    }
-
-    .tracks-table tr.selected:focus {
-        background-color: #d2d7ef;
+    .tracks-table tbody tr.selected:hover {
+        background-color: var(--color-action-selected-hover);
     }
 
     .dropdown-cell {
         position: relative;
         overflow: visible;
+        width: 1%;
+        text-align: right;
     }
 
     .dropdown-button {
-        background: none;
-        border: none;
-        font-size: 1.2em;
-        cursor: pointer;
-        padding: 4px 8px;
-        border-radius: 4px;
-        color: #666;
-        transition: background-color 0.2s;
-    }
-
-    .dropdown-button:hover {
-        background-color: #e9ecef;
+        font-size: 1.2rem;
+        line-height: 1;
     }
 
     .dropdown-menu {
         position: fixed;
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         z-index: 9999;
-        min-width: 150px;
+        min-width: 170px;
+        padding: 8px 0;
+        background: var(--color-paper);
         transform: translate(-100%, 0);
     }
 
     .dropdown-item {
         display: block;
-        padding: 8px 12px;
-        color: #333;
+        padding: 8px 16px;
+        color: var(--color-text);
         text-decoration: none;
-        border-bottom: 1px solid #eee;
-        transition: background-color 0.2s;
-    }
-
-    .dropdown-item:last-child {
-        border-bottom: none;
+        font-size: 0.875rem;
+        transition: background-color 0.15s;
     }
 
     .dropdown-item:hover {
-        background-color: #f8f9fa;
+        background-color: var(--color-action-hover);
     }
 </style>
