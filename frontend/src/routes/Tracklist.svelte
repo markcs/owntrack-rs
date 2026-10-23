@@ -10,15 +10,29 @@
         utcToLocalTime,
     } from "./datetime.js";
 
-    let { date, curTrack, setDate, setCurTrack } = $props();
+    let { date, curTrack, setDate, setCurTrack, preselectDeviceId } = $props();
     let datestr = $derived(isoDateString(date));
     let loader = $derived(load_infos());
+
+    // A device id to auto-select when arriving via a deep link. Consumed once,
+    // so manual date changes afterwards fall back to the default selection.
+    let pendingPreselect = $state(preselectDeviceId ?? null);
 
     async function load_infos() {
         const res = await fetch(
             `${PUBLIC_BASE_URL}/trackinfos?date=${datestr}&tz=${utcOffsetMinutes(date)}`,
         );
         const json = await res.json();
+        // If we arrived via a deep link naming a device, select that device's
+        // track for this day if present.
+        if (pendingPreselect != null) {
+            const match = json.find((t) => t.device_id === pendingPreselect);
+            pendingPreselect = null;
+            if (match) {
+                setCurTrack(match);
+                return json;
+            }
+        }
         // Select first track, if there is only one for the first day
         if (
             json.length == 1 ||

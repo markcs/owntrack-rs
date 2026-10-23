@@ -4,9 +4,34 @@
     import Trackinfo from "./Trackinfo.svelte";
     import Tracktitle from "./Tracktitle.svelte";
     import Map from "./Map.svelte";
+    import { browser } from "$app/environment";
     import { isoDateString, isToday, utcOffsetMinutes } from "./datetime.js";
 
-    let date = $state(new Date());
+    // Optional deep-link params: ?date=YYYY-MM-DD&device=<id> (e.g. from the
+    // spatial dashboard results). Parsed on the client since the page is
+    // prerendered to static HTML.
+    function initialState() {
+        if (browser) {
+            const q = new URLSearchParams(window.location.search);
+            const dateParam = q.get("date");
+            const deviceParam = q.get("device");
+            let date = new Date();
+            if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+                const [y, m, d] = dateParam.split("-").map(Number);
+                date = new Date(y, m - 1, d);
+            }
+            const deviceId =
+                deviceParam != null && deviceParam !== ""
+                    ? Number(deviceParam)
+                    : null;
+            return { date, deviceId: Number.isNaN(deviceId) ? null : deviceId };
+        }
+        return { date: new Date(), deviceId: null };
+    }
+
+    const init = initialState();
+    let date = $state(init.date);
+    let preselectDeviceId = $state(init.deviceId);
     let curTrack = $state();
     let trackpoints = $state();
     let positionsSelector = $derived.by(() => {
@@ -53,7 +78,7 @@
         </div>
 
         <div class="tracklist-container">
-            <Tracklist {date} {curTrack} {setDate} {setCurTrack} />
+            <Tracklist {date} {curTrack} {setDate} {setCurTrack} {preselectDeviceId} />
         </div>
     </div>
 </div>

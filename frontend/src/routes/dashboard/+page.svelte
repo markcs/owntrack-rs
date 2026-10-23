@@ -14,6 +14,7 @@
     const { LngLatBounds } = maplibregl;
     import "maplibre-gl/dist/maplibre-gl.css";
     import { PUBLIC_BASE_URL } from "$env/static/public";
+    import { browser } from "$app/environment";
     import { isoDateString, utcOffsetMinutes, addDays } from "../datetime.js";
 
     let map = $state.raw();
@@ -242,6 +243,7 @@
             for (const ds of r.dates) {
                 const d = parseLocalDate(ds);
                 rows.push({
+                    device_id: r.device_id,
                     device: deviceLabel(r.device_id),
                     area: areaLabel(r),
                     month: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
@@ -260,6 +262,17 @@
         return rows;
     });
 
+    // Deep link into the viewer map, opened on the given day for the given
+    // device. The map shows every fix the device recorded that local day, so
+    // multiple fixes on the same day are all visible on one track.
+    function trackUrl(row) {
+        const q = new URLSearchParams({
+            date: row.date,
+            device: String(row.device_id),
+        });
+        return `${PUBLIC_BASE_URL}/?${q.toString()}`;
+    }
+
     // --- CSV export ---
     // Quote a value for CSV: wrap in double quotes and escape embedded quotes.
     function csvCell(value) {
@@ -269,11 +282,14 @@
 
     // Build a CSV of the per-day detail rows currently shown.
     function buildCsv() {
-        const header = ["Device", "Area", "Month", "Date", "Day"];
+        const header = ["Device", "Area", "Month", "Date", "Day", "Location"];
         const lines = [header.map(csvCell).join(",")];
         for (const row of dateRows) {
+            // Absolute URL so the link works from the exported file.
+            const rel = trackUrl(row);
+            const url = browser ? new URL(rel, window.location.origin).href : rel;
             lines.push(
-                [row.device, row.area, row.month, row.date, row.weekday]
+                [row.device, row.area, row.month, row.date, row.weekday, url]
                     .map(csvCell)
                     .join(","),
             );
@@ -566,6 +582,7 @@
                                         <th>Month</th>
                                         <th>Date</th>
                                         <th>Day</th>
+                                        <th>Location</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -576,6 +593,17 @@
                                             <td>{row.month}</td>
                                             <td>{row.date}</td>
                                             <td>{row.weekday}</td>
+                                            <td>
+                                                <a
+                                                    class="track-link"
+                                                    href={trackUrl(row)}
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    title="Show this device's track for this day on the map"
+                                                >
+                                                    View track
+                                                </a>
+                                            </td>
                                         </tr>
                                     {/each}
                                 </tbody>
@@ -742,6 +770,22 @@
     .button.export-csv {
         padding: 4px 12px;
         font-size: 0.85em;
-        border: 1px solid var(--color-separator);
+        color: var(--color-primary);
+        background: transparent;
+        border: 1px solid var(--color-primary);
+    }
+    .button.export-csv:hover,
+    .button.export-csv:focus {
+        color: var(--color-primary-text);
+        background: var(--color-primary);
+    }
+    .track-link {
+        color: var(--color-primary);
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .track-link:hover,
+    .track-link:focus {
+        text-decoration: underline;
     }
 </style>
