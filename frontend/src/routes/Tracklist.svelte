@@ -285,8 +285,9 @@
 
     .tracks-table {
         width: 100%;
+        table-layout: fixed;
         border-collapse: collapse;
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
     }
 
     .tracks-table th {
@@ -294,7 +295,7 @@
         top: 0;
         z-index: 1;
         text-align: left;
-        padding: 10px 12px;
+        padding: 10px 8px;
         color: var(--color-text-secondary);
         background: var(--color-paper);
         border-bottom: 1px solid var(--color-divider);
@@ -303,10 +304,33 @@
     }
 
     .tracks-table td {
-        padding: 10px 12px;
+        padding: 10px 8px;
         color: var(--color-text);
         border-bottom: 1px solid var(--color-divider);
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Column widths so the Start/End times always fit inside the 360px
+       sidebar; User and Device flex and truncate with an ellipsis. */
+    .tracks-table th:nth-child(1),
+    .tracks-table td:nth-child(1) {
+        width: 24%;
+    }
+    .tracks-table th:nth-child(2),
+    .tracks-table td:nth-child(2) {
+        width: 26%;
+    }
+    .tracks-table th:nth-child(3),
+    .tracks-table td:nth-child(3),
+    .tracks-table th:nth-child(4),
+    .tracks-table td:nth-child(4) {
+        width: 21%;
+    }
+    .tracks-table th:nth-child(5),
+    .tracks-table td:nth-child(5) {
+        width: 32px;
     }
 
     .tracks-table tbody tr {
@@ -329,12 +353,16 @@
     .dropdown-cell {
         position: relative;
         overflow: visible;
-        width: 1%;
         text-align: right;
+        padding-left: 0;
+        padding-right: 2px;
     }
 
     .dropdown-button {
-        font-size: 1.2rem;
+        width: 28px;
+        height: 28px;
+        padding: 2px;
+        font-size: 1.1rem;
         line-height: 1;
     }
 

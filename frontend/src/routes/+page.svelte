@@ -133,13 +133,26 @@
         border-radius: var(--radius);
     }
 
-    /* On small screens the sidebar takes the full width, like Traccar. */
+    /* On small screens the sidebar becomes a bounded panel pinned to the top
+       so the map stays visible below it. The track list scrolls inside the
+       panel instead of pushing the map off-screen. */
     @media (max-width: 768px) {
         .sidebar {
             width: 100%;
-            max-height: 100%;
+            height: auto;
+            max-height: 62vh;
             margin: 0;
             gap: 0;
+        }
+
+        .sidebar-info {
+            margin-top: 0;
+            border-top: 1px solid var(--color-divider);
+            border-radius: 0;
+            box-shadow: none;
+            /* Keep the stats compact so the list keeps most of the room. */
+            max-height: 30vh;
+            overflow-y: auto;
         }
     }
 </style>
