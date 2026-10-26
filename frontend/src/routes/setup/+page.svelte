@@ -1,107 +1,73 @@
 <script>
-    import "../global.css";
-    import "../owntracks-theme.css";
-    import { PUBLIC_BASE_URL } from "$env/static/public";
     import { onMount } from "svelte";
+    import { fetchOtrc, otrcDownloadUrl } from "$lib/api.js";
 
-    let loading = $state("loading");
-    let otrc = $state();
+    let status = $state("loading");
+    let otrc = $state(null);
 
     onMount(async () => {
-        try {
-            const res = await fetch(`${PUBLIC_BASE_URL}/otrc`);
-            if (res.status == 403) {
-                loading = "invalid";
-            } else if (res.ok) {
-                const json = await res.json();
-                // Base64 encode the JSON
-                const jsonString = JSON.stringify(json);
-                otrc = btoa(jsonString);
-                loading = "ok";
-            } else {
-                loading = "error";
-            }
-        } catch (err) {
-            console.log(err);
-            loading = "error";
-        }
+        const result = await fetchOtrc();
+        status = result.status;
+        otrc = result.otrc ?? null;
     });
 </script>
 
-<div class="page">
-    <header class="ot-header">
-        <span class="header-title">Setup</span>
-        <div class="ot-nav-item header-right">
-            <a class="button button-flat" href="{PUBLIC_BASE_URL}/">
-                &larr; Back to map
-            </a>
-        </div>
-    </header>
+<div class="setup">
+    <section class="card setup-card">
+        <h2>Device setup</h2>
 
-    <main>
-        <section class="ot-card setup-card">
-            {#if loading === "loading"}
-                <p class="hint">Loading setup configuration…</p>
-            {:else if loading === "ok"}
-                <p>Configure the OwnTracks app on your device:</p>
-                <div class="setup-actions">
-                    <a
-                        class="button button-primary"
-                        href="owntracks:///config?inline={otrc}"
-                    >
-                        Setup OwnTracks App
-                    </a>
-                    <a
-                        class="button"
-                        href="{PUBLIC_BASE_URL}/otrc"
-                        download="otrc.json"
-                    >
-                        Download OTRC file
-                    </a>
-                </div>
-            {:else if loading === "invalid"}
-                <p class="error">
-                    Authorization failed or configuration has expired.
-                </p>
-            {:else if loading === "error"}
-                <p class="error">
-                    An error occurred while loading the setup configuration.
-                </p>
-            {/if}
-        </section>
-    </main>
+        {#if status === "loading"}
+            <p class="hint">Loading setup configuration…</p>
+        {:else if status === "ok"}
+            <p class="muted">
+                Configure the OwnTracks app on your device, or download the
+                remote-configuration file.
+            </p>
+            <div class="actions">
+                <a
+                    class="btn btn-primary"
+                    href="owntracks:///config?inline={otrc}"
+                >
+                    Set up OwnTracks app
+                </a>
+                <a class="btn" href={otrcDownloadUrl()} download="otrc.json">
+                    Download OTRC file
+                </a>
+            </div>
+            <p class="hint note">
+                The button opens the OwnTracks app with this server's settings.
+                If nothing happens, install the app first, then download the
+                OTRC file and import it manually.
+            </p>
+        {:else if status === "invalid"}
+            <p class="error">
+                Authorization failed or the configuration has expired.
+            </p>
+        {:else}
+            <p class="error">
+                An error occurred while loading the setup configuration.
+            </p>
+        {/if}
+    </section>
 </div>
 
 <style>
-    .page {
-        min-height: 100vh;
+    .setup {
+        padding: var(--sp-5) var(--sp-4);
         display: flex;
-        flex-direction: column;
-    }
-    main {
-        flex: 1;
-        padding: 20px;
+        justify-content: center;
     }
     .setup-card {
-        max-width: 520px;
+        width: 100%;
+        max-width: 540px;
     }
-    .setup-actions {
+    .actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 12px;
+        gap: var(--sp-3);
+        margin-top: var(--sp-4);
     }
-    .button {
-        border: 1px solid var(--color-separator);
-        text-decoration: none;
-    }
-    .button.button-primary {
-        border-color: var(--color-primary);
-    }
-    .hint {
-        color: #666;
-    }
-    .error {
-        color: #c00;
+    .note {
+        margin-top: var(--sp-4);
     }
 </style>

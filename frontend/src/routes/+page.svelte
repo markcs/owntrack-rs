@@ -1,15 +1,13 @@
 <script>
-    import "./global.css";
-    import Tracklist from "./Tracklist.svelte";
-    import Trackinfo from "./Trackinfo.svelte";
-    import Tracktitle from "./Tracktitle.svelte";
-    import Map from "./Map.svelte";
     import { browser } from "$app/environment";
-    import { isoDateString, isToday, utcOffsetMinutes } from "./datetime.js";
+    import MapView from "$lib/components/MapView.svelte";
+    import TrackList from "$lib/components/TrackList.svelte";
+    import TrackStats from "$lib/components/TrackStats.svelte";
+    import { isoDateString, isToday, utcOffsetMinutes } from "$lib/datetime.js";
+    import { positionsUrl as positionsUrlFn } from "$lib/api.js";
 
-    // Optional deep-link params: ?date=YYYY-MM-DD&device=<id> (e.g. from the
-    // spatial dashboard results). Parsed on the client since the page is
-    // prerendered to static HTML.
+    // Optional deep-link params: ?date=YYYY-MM-DD&device=<id>, e.g. from the
+    // dashboard results. Parsed on the client since the page is prerendered.
     function initialState() {
         if (browser) {
             const q = new URLSearchParams(window.location.search);
@@ -32,140 +30,151 @@
     const init = initialState();
     let date = $state(init.date);
     let preselectDeviceId = $state(init.deviceId);
-    let curTrack = $state();
-    let trackpoints = $state();
-    let positionsSelector = $derived.by(() => {
-        // Show positions if date is today
-        if (isToday(date)) {
-            return `date=${isoDateString(date)}&tz=${utcOffsetMinutes(date)}`;
-        } else {
-            return null;
-        }
-    });
+    let curTrack = $state(null);
+    let trackpoints = $state(null);
 
-    function setDate(newDate) {
-        date = newDate;
-    }
+    // Live positions only make sense for today.
+    let positionsUrl = $derived(
+        isToday(date)
+            ? positionsUrlFn(isoDateString(date), utcOffsetMinutes(date))
+            : null,
+    );
 
-    function setCurTrack(newTrack) {
-        curTrack = newTrack;
-    }
-    function setTrackpoints(newTrackpoints) {
-        trackpoints = newTrackpoints;
-    }
+    // Mobile panel collapse state.
+    let listOpen = $state(true);
+    let statsOpen = $state(true);
+
+    const setDate = (d) => (date = d);
+    const setCurTrack = (t) => (curTrack = t);
+    const setTrackpoints = (t) => (trackpoints = t);
 </script>
 
-<div class="container">
-    <div class="top-section">
-        <div class="left-column">
-            <div class="map-section">
-                <div class="map-title">
-                    <Tracktitle {curTrack} />
-                </div>
-                <div class="map-container">
-                    <Map
-                        {curTrack}
-                        {trackpoints}
-                        {positionsSelector}
-                        {setCurTrack}
-                    />
-                </div>
-            </div>
+<div class="viewer">
+    <section class="map-pane card">
+        <MapView {curTrack} {trackpoints} {positionsUrl} {setCurTrack} />
+    </section>
 
-            <div class="trackinfo-container">
-                <Trackinfo {curTrack} {setTrackpoints} />
+    <aside class="side">
+        <section class="card panel">
+            <button
+                class="panel-head"
+                aria-expanded={listOpen}
+                onclick={() => (listOpen = !listOpen)}
+            >
+                <h2>Tracks</h2>
+                <span class="caret" class:open={listOpen}>▾</span>
+            </button>
+            <div class="panel-body list-body" class:collapsed={!listOpen}>
+                <TrackList
+                    {date}
+                    {curTrack}
+                    {setDate}
+                    {setCurTrack}
+                    {preselectDeviceId}
+                />
             </div>
-        </div>
+        </section>
 
-        <div class="tracklist-container">
-            <Tracklist {date} {curTrack} {setDate} {setCurTrack} {preselectDeviceId} />
-        </div>
-    </div>
+        <section class="card panel">
+            <button
+                class="panel-head"
+                aria-expanded={statsOpen}
+                onclick={() => (statsOpen = !statsOpen)}
+            >
+                <h2>Track details</h2>
+                <span class="caret" class:open={statsOpen}>▾</span>
+            </button>
+            <div class="panel-body" class:collapsed={!statsOpen}>
+                <TrackStats {curTrack} {setTrackpoints} />
+            </div>
+        </section>
+    </aside>
 </div>
 
 <style>
-    * {
-        box-sizing: border-box;
-        margin: 0;
+    .viewer {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        grid-template-rows: 1fr auto;
+        gap: var(--sp-4);
+        padding: var(--sp-4);
+        height: calc(100vh - var(--app-bar-h));
+    }
+    .map-pane {
+        grid-row: 1 / span 2;
+        padding: var(--sp-2);
+        min-height: 0;
+    }
+    .side {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-4);
+        min-height: 0;
+    }
+
+    .panel {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
         padding: 0;
     }
-
-    .container {
+    .panel:first-child {
+        flex: 1;
+    }
+    .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         width: 100%;
-        margin: 0 auto;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: var(--sp-4);
+        font: inherit;
+    }
+    .panel-head h2 {
+        font-size: var(--fs-lg);
+    }
+    .caret {
+        transition: transform 0.2s ease;
+        color: var(--c-text-muted);
+    }
+    .caret.open {
+        transform: rotate(180deg);
+    }
+    .panel-body {
+        padding: 0 var(--sp-4) var(--sp-4);
+        min-height: 0;
+    }
+    .list-body {
+        flex: 1;
         display: flex;
         flex-direction: column;
     }
 
-    .top-section {
-        display: flex;
-        flex-wrap: wrap;
-        width: 100%;
-    }
-
-    .left-column {
-        flex: 1;
-        min-width: 300px;
-        padding-right: 20px;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .map-title {
-        margin-bottom: 6px;
-    }
-
-    .map-section {
-        width: 100%;
-        position: relative;
-        margin-bottom: 20px;
-    }
-
-    .map-container {
-        width: 100%;
-    }
-
-    .trackinfo-container {
-        width: 100%;
-        margin-bottom: 20px;
-    }
-
-    .tracklist-container {
-        flex: 1;
-        min-width: 300px;
-        max-height: calc(
-            100vh - 40px
-        ); /* Limit to screen height minus some padding */
-        overflow-y: auto; /* Make it scrollable */
-        padding-right: 10px; /* Add some padding to accommodate scrollbar */
-    }
-
+    /* On desktop the panels are always expanded; the collapse toggle is a
+       mobile affordance. */
     @media (max-width: 768px) {
-        .container {
+        .viewer {
             display: flex;
             flex-direction: column;
+            height: auto;
+            min-height: calc(100vh - var(--app-bar-h));
         }
-
-        .top-section {
-            flex-direction: column;
+        .map-pane {
+            height: 55vh;
+            flex: none;
         }
-
-        .left-column {
-            width: 100%;
-            padding-right: 0;
-            margin-bottom: 20px;
+        .panel:first-child {
+            flex: none;
         }
-
-        .map-section {
-            width: 100%;
-            margin-bottom: 20px;
+        .list-body {
+            max-height: 50vh;
         }
-
-        .tracklist-container {
-            width: 100%;
-            margin-bottom: 20px;
-            max-height: 400px; /* Limit height on mobile */
-            overflow-y: auto;
+        .panel-body.collapsed {
+            display: none;
         }
     }
 </style>
