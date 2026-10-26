@@ -18,11 +18,33 @@
         addDays,
         parseLocalDate,
     } from "$lib/datetime.js";
-    import { fetchTrackInfos, fetchDaysInArea } from "$lib/api.js";
+    import { fetchTrackInfos, fetchDaysInArea, fetchLatestPosition } from "$lib/api.js";
 
     const { LngLatBounds } = maplibregl;
 
     let map = $state.raw();
+
+    // Default view: center on the last received location of any device, so the
+    // dashboard opens where the data is rather than on the whole world. Applied
+    // once, when both the map and the fetched position are ready, so it never
+    // fights the user's panning or "Fit view".
+    const DEFAULT_CENTER = [0, 20];
+    const DEFAULT_ZOOM = 1;
+    // Town/neighbourhood level: close enough to see a device's surroundings,
+    // wide enough to give context for drawing an area around it.
+    const LATEST_POSITION_ZOOM = 13;
+    let latestPosition = $state.raw(null);
+    let appliedDefaultView = $state(false);
+
+    $effect(() => {
+        if (map && latestPosition && !appliedDefaultView) {
+            appliedDefaultView = true;
+            map.jumpTo({
+                center: [latestPosition.x, latestPosition.y],
+                zoom: LATEST_POSITION_ZOOM,
+            });
+        }
+    });
 
     // --- Date range ---
     let dateFrom = $state(isoDateString(addDays(new Date(), -30)));
@@ -70,6 +92,21 @@
     $effect(() => {
         dateTo;
         loadDevices();
+    });
+
+    // Fetch the last received location once, on mount, to seed the default map
+    // view. Failure is non-fatal: the map simply keeps its world default.
+    let latestRequested = $state(false);
+    $effect(() => {
+        if (latestRequested) return;
+        latestRequested = true;
+        fetchLatestPosition()
+            .then((pos) => {
+                if (pos && typeof pos.x === "number" && typeof pos.y === "number") {
+                    latestPosition = pos;
+                }
+            })
+            .catch((e) => console.error("Failed to load latest position", e));
     });
     function toggleDevice(id) {
         const next = new Set(selectedDeviceIds);
@@ -311,8 +348,8 @@
                 bind:map
                 autoloadGlobalCss={false}
                 style="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"
-                center={[0, 20]}
-                zoom={1}
+                center={DEFAULT_CENTER}
+                zoom={DEFAULT_ZOOM}
                 onclick={onMapClick}
             >
                 <NavigationControl />

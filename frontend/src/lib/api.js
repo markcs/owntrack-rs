@@ -67,6 +67,16 @@ export function positionsUrl(isoDate, tz) {
     return apiUrl(`/positions?date=${isoDate}&tz=${tz}`);
 }
 
+/**
+ * The single most recently received device position, or null if none exists.
+ * @returns {Promise<{device_id:number,x:number,y:number,ts:string,tid:string}|null>}
+ */
+export async function fetchLatestPosition() {
+    const res = await fetch(apiUrl(`/latest-position`));
+    if (!res.ok) throw new Error(`latest-position failed (${res.status})`);
+    return res.json();
+}
+
 // --- Setup / OTRC ----------------------------------------------------------
 
 /**
