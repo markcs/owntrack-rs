@@ -282,6 +282,21 @@ async fn positions(db: web::Data<Db>, params: web::Query<TracksParams>) -> HttpR
         .body(json)
 }
 
+/// Most recently received device position, as a small JSON object. Returns
+/// `null` when no device has reported a fix yet.
+#[get("/latest-position")]
+async fn latest_position(db: web::Data<Db>) -> actix_web::Result<impl Responder> {
+    match db.query_latest_position().await {
+        Ok(pos) => Ok(web::Json(pos)),
+        Err(e) => {
+            log::error!("Failed to fetch latest position: {e}");
+            Err(error::ErrorInternalServerError(
+                "Failed to fetch latest position",
+            ))
+        }
+    }
+}
+
 #[get("/otrc")]
 async fn otrc(db: web::Data<Db>, req: HttpRequest) -> actix_web::Result<impl Responder> {
     match db.is_valid_invite().await {
@@ -366,6 +381,7 @@ pub async fn webserver(db: Db) -> std::io::Result<()> {
             .service(track)
             .service(trackpoints)
             .service(positions)
+            .service(latest_position)
             .service(otrc)
             // Polygon payloads exceed the default 4 KiB JSON limit, so this
             // route gets its own extractor config with a larger limit.

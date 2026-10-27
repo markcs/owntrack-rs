@@ -84,7 +84,7 @@ pub struct GpsPoint {
     pub annotations: String,
 }
 
-#[derive(sqlx::FromRow, Debug)]
+#[derive(sqlx::FromRow, Serialize, Debug)]
 pub struct DevicePosition {
     pub device_id: i32,
     pub y: f64,
@@ -343,6 +343,36 @@ impl Db {
         }
 
         Ok(positions)
+    }
+
+    /// Return the single most recently received device position, regardless of
+    /// day. `None` if no device has ever reported a fix.
+    pub async fn query_latest_position(&self) -> anyhow::Result<Option<DevicePosition>> {
+        let mut position: Option<DevicePosition> = sqlx::query_as(
+            r#"
+            SELECT
+                id as device_id,
+                lat as y,
+                lon as x,
+                datetime(ts, 'unixepoch') AS ts,
+                tid,
+                velocity as speed,
+                alt as elevation,
+                accuracy,
+                v_accuracy,
+                cog
+            FROM devices
+            ORDER BY ts DESC
+            LIMIT 1
+            "#,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        if let Some(position) = &mut position {
+            position.ts = utc_stamp(&position.ts);
+        }
+
+        Ok(position)
     }
 
     /// Return all position fixes in the epoch-second window `[start, end)`,
