@@ -3,6 +3,9 @@ services:
     image: sourcepole/owntrack-rs:latest
     restart: unless-stopped
     environment:
+      # Log verbosity. Override in .env, e.g. RUST_LOG=debug for everything or
+      # RUST_LOG=owntrack_rs::geocode=debug to debug just the geocoder.
+      RUST_LOG: ${RUST_LOG:-info}
       DB_CONNECTION: "sqlite://db/owntracks.sqlite"
       HTTP_ADDRESS: ${HTTP_ADDRESS:-localhost}
       OTRS_USERNAME: ${OTRS_USERNAME}
@@ -12,6 +15,13 @@ services:
       MQTT_URL: ${MQTT_URL}
       MQTT_USER: ${MQTT_USER}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
+      # Reverse-geocoding (optional). Defaults are conservative and respect the
+      # public Nominatim usage policy; override in .env as needed.
+      GEOCODE_ENABLED: ${GEOCODE_ENABLED:-true}
+      GEOCODE_URL: ${GEOCODE_URL:-https://nominatim.openstreetmap.org/reverse}
+      GEOCODE_DELAY_SECS: ${GEOCODE_DELAY_SECS:-1}
+      GEOCODE_POLL_SECS: ${GEOCODE_POLL_SECS:-60}
+      GEOCODE_BATCH_SIZE: ${GEOCODE_BATCH_SIZE:-50}
     volumes:
       - db:/db
 
