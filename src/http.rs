@@ -1,4 +1,5 @@
 use crate::db::{Db, TrackRef};
+use crate::geocode::GeocodeConfig;
 use crate::geojson;
 use crate::gpx;
 use crate::metrics::{self, DaysInAreaRequest};
@@ -227,8 +228,12 @@ async fn csvtrack(db: web::Data<Db>, track_ref: web::Query<TrackRef>) -> HttpRes
 
 /// Get GeoJSON track points
 #[get("/trackpoints")]
-async fn trackpoints(db: web::Data<Db>, track_ref: web::Query<TrackRef>) -> HttpResponse {
-    let track_ = match db.query_track(&track_ref).await {
+async fn trackpoints(
+    db: web::Data<Db>,
+    cfg: web::Data<GeocodeConfig>,
+    track_ref: web::Query<TrackRef>,
+) -> HttpResponse {
+    let mut track_ = match db.query_track(&track_ref).await {
         Ok(data) => data,
         Err(e) => {
             log::error!("Failed to fetch track: {e}");
@@ -237,6 +242,10 @@ async fn trackpoints(db: web::Data<Db>, track_ref: web::Query<TrackRef>) -> Http
                 .finish();
         }
     };
+    if cfg.enabled {
+        db.enrich_points_addresses(&mut track_.points, cfg.precision)
+            .await;
+    }
     let geojson = geojson::track_points(&[track_]);
     let json = match geojson {
         Ok(json) => json,
@@ -286,9 +295,19 @@ async fn positions(db: web::Data<Db>, params: web::Query<TracksParams>) -> HttpR
 /// Most recently received device position, as a small JSON object. Returns
 /// `null` when no device has reported a fix yet.
 #[get("/latest-position")]
-async fn latest_position(db: web::Data<Db>) -> actix_web::Result<impl Responder> {
+async fn latest_position(
+    db: web::Data<Db>,
+    cfg: web::Data<GeocodeConfig>,
+) -> actix_web::Result<impl Responder> {
     match db.query_latest_position().await {
-        Ok(pos) => Ok(web::Json(pos)),
+        Ok(mut pos) => {
+            if cfg.enabled {
+                if let Some(p) = pos.as_mut() {
+                    db.enrich_position_address(p, cfg.precision).await;
+                }
+            }
+            Ok(web::Json(pos))
+        }
         Err(e) => {
             log::error!("Failed to fetch latest position: {e}");
             Err(error::ErrorInternalServerError(
@@ -342,7 +361,7 @@ async fn serve_assets(path: web::Path<String>) -> EmbedResponse<EmbedableFileRes
     Embed::get(path).into_response()
 }
 
-pub async fn webserver(db: Db) -> std::io::Result<()> {
+pub async fn webserver(db: Db, geocode_cfg: GeocodeConfig) -> std::io::Result<()> {
     let bind_addr = dotenvy::var("HTTP_LISTEN").unwrap_or("0.0.0.0:8083".to_string());
     log::info!("Listening on http://{bind_addr}/");
     HttpServer::new(move || {
@@ -374,6 +393,7 @@ pub async fn webserver(db: Db) -> std::io::Result<()> {
             .wrap(middleware::Compress::default())
             .wrap(cors)
             .app_data(web::Data::new(db.clone()))
+            .app_data(web::Data::new(geocode_cfg.clone()))
             .service(owntracks)
             .service(rawjson)
             .service(trackinfos)

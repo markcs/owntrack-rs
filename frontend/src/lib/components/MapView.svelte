@@ -152,9 +152,18 @@
 
     function propsToHtml(obj) {
         let str = "";
+        // Show the resolved address first and prominently when present.
+        if (obj && obj.address) {
+            str += `<strong>${obj.address}</strong><br/>`;
+        }
         for (const p in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, p)) {
-                str += `${p}: ${obj[p]}<br/>`;
+                const v = obj[p];
+                // Skip the address (already shown) and empty/null values so the
+                // popup stays readable while geocoding is still catching up.
+                if (p === "address" || v === null || v === undefined || v === "")
+                    continue;
+                str += `${p}: ${v}<br/>`;
             }
         }
         return str;

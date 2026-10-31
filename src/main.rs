@@ -1,5 +1,6 @@
 pub mod db;
 mod geojson;
+mod geocode;
 mod gpx;
 mod http;
 mod meshtastic;
@@ -26,6 +27,12 @@ async fn main() -> anyhow::Result<()> {
     let _handler = tokio::spawn(async move {
         mqtt::subscribe(&mqtt_db).await.unwrap();
     });
-    http::webserver(db).await?;
+    let geocode_db = db.clone();
+    let geocode_cfg = geocode::GeocodeConfig::from_env();
+    let worker_cfg = geocode_cfg.clone();
+    let _geocoder = tokio::spawn(async move {
+        geocode::run_worker(geocode_db, worker_cfg).await;
+    });
+    http::webserver(db, geocode_cfg).await?;
     Ok(())
 }
