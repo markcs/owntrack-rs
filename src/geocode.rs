@@ -134,6 +134,9 @@ impl Address {
     }
 
     /// A short human-readable label, best-effort, for map popups and labels.
+    /// Of the form `primary, suburb, city`, including whichever parts exist
+    /// (e.g. "Nepean Highway, Mentone, Melbourne"). Duplicate consecutive
+    /// parts are collapsed so a suburb that equals the city isn't repeated.
     pub fn label(&self) -> Option<String> {
         let primary = self
             .name
@@ -143,12 +146,21 @@ impl Address {
                 (None, Some(r)) => Some(r.clone()),
                 _ => None,
             });
-        let locality = self.city.clone().or_else(|| self.suburb.clone());
-        match (primary, locality) {
-            (Some(p), Some(l)) if p != l => Some(format!("{p}, {l}")),
-            (Some(p), _) => Some(p),
-            (None, Some(l)) => Some(l),
-            (None, None) => self.display_name.clone(),
+        // Build an ordered list of parts, dropping empties and consecutive
+        // duplicates, then join with ", ".
+        let mut parts: Vec<String> = Vec::new();
+        for part in [primary, self.suburb.clone(), self.city.clone()]
+            .into_iter()
+            .flatten()
+        {
+            if parts.last() != Some(&part) {
+                parts.push(part);
+            }
+        }
+        if parts.is_empty() {
+            self.display_name.clone()
+        } else {
+            Some(parts.join(", "))
         }
     }
 }
@@ -394,5 +406,41 @@ mod tests {
         let addr = flatten(parsed);
         assert_eq!(addr.name.as_deref(), Some("Town Hall"));
         assert_eq!(addr.label().as_deref(), Some("Town Hall, Metropolis"));
+    }
+
+    #[test]
+    fn label_includes_road_suburb_and_city_inline() {
+        let addr = Address {
+            road: Some("Nepean Highway".into()),
+            suburb: Some("Mentone".into()),
+            city: Some("Melbourne".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            addr.label().as_deref(),
+            Some("Nepean Highway, Mentone, Melbourne")
+        );
+    }
+
+    #[test]
+    fn label_collapses_duplicate_suburb_and_city() {
+        // Suburb equal to city should not be repeated.
+        let addr = Address {
+            road: Some("Third Street".into()),
+            suburb: Some("Melbourne".into()),
+            city: Some("Melbourne".into()),
+            ..Default::default()
+        };
+        assert_eq!(addr.label().as_deref(), Some("Third Street, Melbourne"));
+    }
+
+    #[test]
+    fn label_with_suburb_but_no_city() {
+        let addr = Address {
+            road: Some("Third Street".into()),
+            suburb: Some("Parkdale".into()),
+            ..Default::default()
+        };
+        assert_eq!(addr.label().as_deref(), Some("Third Street, Parkdale"));
     }
 }

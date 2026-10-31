@@ -156,23 +156,12 @@
         if (obj && obj.address) {
             str += `<strong>${obj.address}</strong><br/>`;
         }
-        // Show the suburb on its own line when present (and not already the
-        // whole address label), so the locality is visible at a glance.
-        if (obj && obj.suburb && obj.suburb !== obj.address) {
-            str += `Suburb: ${obj.suburb}<br/>`;
-        }
         for (const p in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, p)) {
                 const v = obj[p];
-                // Skip fields shown above and empty/null values so the popup
-                // stays readable while geocoding is still catching up.
-                if (
-                    p === "address" ||
-                    p === "suburb" ||
-                    v === null ||
-                    v === undefined ||
-                    v === ""
-                )
+                // Skip the address (already shown) and empty/null values so the
+                // popup stays readable while geocoding is still catching up.
+                if (p === "address" || v === null || v === undefined || v === "")
                     continue;
                 str += `${p}: ${v}<br/>`;
             }

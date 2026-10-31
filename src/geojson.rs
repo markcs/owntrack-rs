@@ -14,7 +14,6 @@ fn point_properties(pt: &GpsPoint) -> JsonObject {
         ("v_accuracy".to_string(), JsonValue::from(pt.v_accuracy)),
         ("cog".to_string(), JsonValue::from(pt.cog)),
         ("address".to_string(), JsonValue::from(pt.address.clone())),
-        ("suburb".to_string(), JsonValue::from(pt.suburb.clone())),
     ]);
     let annotations: serde_json::Map<String, serde_json::Value> =
         serde_json::from_str(pt.annotations.as_str()).unwrap();
