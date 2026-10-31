@@ -87,6 +87,10 @@ pub struct GpsPoint {
     /// cache. `None` when not yet geocoded. Not read from the positions table.
     #[sqlx(default)]
     pub address: Option<String>,
+    /// Suburb component of the resolved address, when present. Filled in after
+    /// the DB query from the geocode cache; not read from the positions table.
+    #[sqlx(default)]
+    pub suburb: Option<String>,
 }
 
 #[derive(sqlx::FromRow, Serialize, Debug)]
@@ -473,23 +477,25 @@ impl Db {
     /// costs at most one query per unique cached location.
     pub async fn enrich_points_addresses(&self, points: &mut [GpsPoint], precision: u32) {
         use std::collections::HashMap;
-        let mut cache: HashMap<(String, String), Option<String>> = HashMap::new();
+        // Cache per rounded coordinate: (label, suburb), so a dense track costs
+        // at most one query per unique cached location.
+        let mut cache: HashMap<(String, String), (Option<String>, Option<String>)> = HashMap::new();
         for pt in points.iter_mut() {
             let key = (round_key(pt.y, precision), round_key(pt.x, precision));
-            let label = match cache.get(&key) {
-                Some(label) => label.clone(),
+            let (label, suburb) = match cache.get(&key) {
+                Some(entry) => entry.clone(),
                 None => {
-                    let label = self
-                        .lookup_address(pt.y, pt.x, precision)
-                        .await
-                        .ok()
-                        .flatten()
-                        .and_then(|a| a.label());
-                    cache.insert(key, label.clone());
-                    label
+                    let addr = self.lookup_address(pt.y, pt.x, precision).await.ok().flatten();
+                    let entry = match addr {
+                        Some(a) => (a.label(), a.suburb.clone()),
+                        None => (None, None),
+                    };
+                    cache.insert(key, entry.clone());
+                    entry
                 }
             };
             pt.address = label;
+            pt.suburb = suburb;
         }
     }
 
