@@ -4,7 +4,10 @@
     import TrackList from "$lib/components/TrackList.svelte";
     import TrackStats from "$lib/components/TrackStats.svelte";
     import { isoDateString, isToday, utcOffsetMinutes } from "$lib/datetime.js";
-    import { positionsUrl as positionsUrlFn } from "$lib/api.js";
+    import {
+        positionsUrl as positionsUrlFn,
+        fetchLatestPosition,
+    } from "$lib/api.js";
 
     // Optional deep-link params: ?date=YYYY-MM-DD&device=<id>, e.g. from the
     // dashboard results. Parsed on the client since the page is prerendered.
@@ -47,11 +50,45 @@
     const setDate = (d) => (date = d);
     const setCurTrack = (t) => (curTrack = t);
     const setTrackpoints = (t) => (trackpoints = t);
+
+    // The most recently received position, shown as a "last seen" label with
+    // its resolved address. Refreshed periodically so an address that the
+    // background geocoder resolves after the fix arrives appears without a
+    // manual reload. Failures are non-fatal (the label simply stays hidden).
+    let latestPosition = $state(null);
+    async function refreshLatest() {
+        try {
+            const pos = await fetchLatestPosition();
+            if (pos && typeof pos.x === "number") latestPosition = pos;
+        } catch (e) {
+            console.error("Failed to load latest position", e);
+        }
+    }
+    $effect(() => {
+        if (!browser) return;
+        refreshLatest();
+        const timer = setInterval(refreshLatest, 20_000);
+        return () => clearInterval(timer);
+    });
 </script>
 
 <div class="viewer">
     <section class="map-pane card">
         <MapView {curTrack} {trackpoints} {positionsUrl} {setCurTrack} />
+        {#if latestPosition}
+            <div class="latest-badge" title={latestPosition.ts}>
+                <span class="latest-label">Last seen</span>
+                {#if latestPosition.address}
+                    <span class="latest-addr">{latestPosition.address}</span>
+                {:else}
+                    <span class="latest-addr muted"
+                        >{latestPosition.y.toFixed(4)}, {latestPosition.x.toFixed(
+                            4,
+                        )}</span
+                    >
+                {/if}
+            </div>
+        {/if}
     </section>
 
     <aside class="side">
@@ -104,6 +141,37 @@
         grid-row: 1 / span 2;
         padding: var(--sp-2);
         min-height: 0;
+        position: relative;
+    }
+    .latest-badge {
+        position: absolute;
+        top: calc(var(--sp-2) + var(--sp-2));
+        left: calc(var(--sp-2) + var(--sp-2));
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-width: 60%;
+        padding: var(--sp-2) var(--sp-3);
+        background: rgba(255, 255, 255, 0.92);
+        border-radius: var(--radius, 8px);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        pointer-events: none;
+        font-size: var(--fs-sm, 0.85rem);
+    }
+    .latest-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--c-text-muted);
+    }
+    .latest-addr {
+        font-weight: 600;
+        color: var(--c-text, #222);
+    }
+    .latest-addr.muted {
+        font-weight: 400;
+        color: var(--c-text-muted);
     }
     .side {
         grid-column: 2;
