@@ -279,6 +279,7 @@ async fn positions(db: web::Data<Db>, params: web::Query<TracksParams>) -> HttpR
     };
     HttpResponse::Ok()
         .content_type("application/geo+json")
+        .insert_header(("Cache-Control", "no-cache"))
         .body(json)
 }
 

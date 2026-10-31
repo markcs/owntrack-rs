@@ -104,15 +104,34 @@
         };
     });
 
-    // Periodically re-fetch the live positions source so markers move in the
-    // background. Following happens via the sourcedata handler once the new
+    // Periodically re-fetch the live positions and push the fresh GeoJSON into
+    // the source so markers move in the background. We fetch ourselves with a
+    // cache-busting query param and `no-store`, because calling setData(url)
+    // with a constant URL is subject to HTTP caching and can silently return
+    // stale data. Following happens via the sourcedata handler once the new
     // data has loaded.
+    async function refreshPositions() {
+        if (!positions_source || !positionsUrl) return;
+        try {
+            const sep = positionsUrl.includes("?") ? "&" : "?";
+            const res = await fetch(`${positionsUrl}${sep}_=${Date.now()}`, {
+                cache: "no-store",
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            positions_source.setData(data);
+        } catch (e) {
+            console.error("positions refresh failed", e);
+        }
+    }
+
     $effect(() => {
-        if (!positionsUrl || !positions_source) return;
-        const url = positionsUrl;
-        const timer = setInterval(() => {
-            positions_source.setData(url);
-        }, REFRESH_MS);
+        // Arm the timer whenever the live view is active. We depend only on
+        // positionsUrl (a plain prop, reliably reactive); the source readiness
+        // is checked inside refreshPositions, so a late-binding source never
+        // leaves us without a running timer.
+        if (!positionsUrl) return;
+        const timer = setInterval(refreshPositions, REFRESH_MS);
         return () => clearInterval(timer);
     });
 
