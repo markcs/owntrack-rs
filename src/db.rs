@@ -836,4 +836,48 @@ mod tests {
         let stamps: Vec<&str> = track.points.iter().map(|p| p.ts.as_str()).collect();
         assert_eq!(stamps, ["2026-10-21 10:00:00+00", "2026-10-21 20:00:00+00"]);
     }
+
+    /// Regression: `lookup_address` must successfully decode a `geocode_cache`
+    /// row into `Address`. The `type` column maps to the `type_` field, which
+    /// requires `#[sqlx(rename = "type")]`; without it the `query_as` fails at
+    /// runtime and the error is swallowed by the enrichment helpers, so every
+    /// position comes back with a null address even though the cache is full.
+    #[tokio::test]
+    async fn lookup_address_decodes_cached_row() {
+        let db = test_db().await;
+        sqlx::raw_sql(
+            r#"
+            CREATE TABLE geocode_cache (
+                id INTEGER PRIMARY KEY, lat_r TEXT NOT NULL, lon_r TEXT NOT NULL,
+                place_id BIGINT, osm_type TEXT, osm_id BIGINT, category TEXT,
+                type TEXT, display_name TEXT, name TEXT, house_number TEXT,
+                road TEXT, suburb TEXT, city TEXT, state TEXT, postcode TEXT,
+                country TEXT, country_code TEXT, raw_json TEXT,
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(lat_r, lon_r)
+            );
+            "#,
+        )
+        .execute(&db.pool)
+        .await
+        .unwrap();
+        // Key for (-37.9846, 145.0748) at precision 4, with the `type` column
+        // populated (the field that previously broke decoding).
+        sqlx::query(
+            "INSERT INTO geocode_cache (lat_r, lon_r, type, road, city, country, raw_json)
+             VALUES ('-37.9846', '145.0748', 'residential', 'Third Street', 'Melbourne', 'Australia', '{}')",
+        )
+        .execute(&db.pool)
+        .await
+        .unwrap();
+
+        // The exact coordinate rounds to the cached key.
+        let addr = db
+            .lookup_address(-37.98455047607422, 145.07484436035156, 4)
+            .await
+            .expect("query must not error");
+        let addr = addr.expect("row must be found and have components");
+        assert_eq!(addr.type_.as_deref(), Some("residential"));
+        assert_eq!(addr.road.as_deref(), Some("Third Street"));
+        assert_eq!(addr.label().as_deref(), Some("Third Street, Melbourne"));
+    }
 }

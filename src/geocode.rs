@@ -102,6 +102,7 @@ pub struct Address {
     pub osm_id: Option<i64>,
     pub category: Option<String>,
     #[serde(rename = "type")]
+    #[sqlx(rename = "type")]
     pub type_: Option<String>,
     pub display_name: Option<String>,
     /// Building / POI name, if any.
