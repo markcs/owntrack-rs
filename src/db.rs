@@ -354,32 +354,42 @@ impl Db {
         let resolved: std::collections::HashSet<(String, String)> =
             resolved.into_iter().collect();
 
-        // Distinct raw coordinates, most-recent first (recent fixes matter most
-        // for a live view). We over-fetch a bounded multiple of `limit` before
-        // rounding/deduping, which is sufficient for a steady live feed.
-        let scan_limit = (limit.max(1)).saturating_mul(50).min(100_000);
-        let raw: Vec<(f64, f64)> = sqlx::query_as(
-            r#"
-            SELECT lat, lon FROM positions
-            ORDER BY id DESC
-            LIMIT $1
-            "#,
-        )
-        .bind(scan_limit)
-        .fetch_all(&self.pool)
-        .await?;
-
+        // Scan positions newest-first in bounded pages, rounding in Rust (for
+        // SQLite/PostgreSQL parity) and collecting distinct cells not yet
+        // resolved. Paging through the whole table — rather than only a recent
+        // slice — ensures the historical backlog is reachable: dense stationary
+        // fixes collapse into few recent cells that are quickly resolved, and a
+        // fixed recent window would then starve the older unresolved cells.
+        const PAGE: i64 = 5_000;
         let mut seen = std::collections::HashSet::new();
         let mut pending = Vec::new();
-        for (lat, lon) in raw {
-            let key = (round_key(lat, precision), round_key(lon, precision));
-            if resolved.contains(&key) || !seen.insert(key.clone()) {
-                continue;
+        let mut offset: i64 = 0;
+        loop {
+            let page: Vec<(f64, f64)> = sqlx::query_as(
+                r#"
+                SELECT lat, lon FROM positions
+                ORDER BY id DESC
+                LIMIT $1 OFFSET $2
+                "#,
+            )
+            .bind(PAGE)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await?;
+            if page.is_empty() {
+                break; // scanned the whole table
             }
-            pending.push(key);
-            if pending.len() as i64 >= limit {
-                break;
+            for (lat, lon) in &page {
+                let key = (round_key(*lat, precision), round_key(*lon, precision));
+                if resolved.contains(&key) || !seen.insert(key.clone()) {
+                    continue;
+                }
+                pending.push(key);
+                if pending.len() as i64 >= limit {
+                    return Ok(pending);
+                }
             }
+            offset += PAGE;
         }
         Ok(pending)
     }
@@ -879,5 +889,68 @@ mod tests {
         assert_eq!(addr.type_.as_deref(), Some("residential"));
         assert_eq!(addr.road.as_deref(), Some("Third Street"));
         assert_eq!(addr.label().as_deref(), Some("Third Street, Melbourne"));
+    }
+
+    /// Regression: the pending scan must reach the historical backlog, not just
+    /// the newest fixes. Dense stationary reporting means the most recent
+    /// positions collapse into a few cells that get resolved quickly; if the
+    /// scan only looked at a recent window, older unresolved cells would be
+    /// starved forever and the backfill would stall.
+    #[tokio::test]
+    async fn pending_scan_reaches_old_unresolved_cells() {
+        let db = test_db().await;
+        sqlx::raw_sql(
+            r#"
+            CREATE TABLE geocode_cache (
+                id INTEGER PRIMARY KEY, lat_r TEXT NOT NULL, lon_r TEXT NOT NULL,
+                place_id BIGINT, osm_type TEXT, osm_id BIGINT, category TEXT,
+                type TEXT, display_name TEXT, name TEXT, house_number TEXT,
+                road TEXT, suburb TEXT, city TEXT, state TEXT, postcode TEXT,
+                country TEXT, country_code TEXT, raw_json TEXT,
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(lat_r, lon_r)
+            );
+            "#,
+        )
+        .execute(&db.pool)
+        .await
+        .unwrap();
+
+        // One old fix in an UNRESOLVED cell (lowest id, so it sorts last).
+        sqlx::query(
+            "INSERT INTO positions (device_id, ts, lat, lon, annotations)
+             VALUES (1, 1, -37.8000, 144.9000, '{}')",
+        )
+        .execute(&db.pool)
+        .await
+        .unwrap();
+        // Many newer fixes all in one RESOLVED cell (-37.9846, 145.0748).
+        for _ in 0..6000 {
+            sqlx::query(
+                "INSERT INTO positions (device_id, ts, lat, lon, annotations)
+                 VALUES (1, 2, -37.98461, 145.07479, '{}')",
+            )
+            .execute(&db.pool)
+            .await
+            .unwrap();
+        }
+        sqlx::query(
+            "INSERT INTO geocode_cache (lat_r, lon_r, road, city, raw_json)
+             VALUES ('-37.9846', '145.0748', 'Third Street', 'Melbourne', '{}')",
+        )
+        .execute(&db.pool)
+        .await
+        .unwrap();
+
+        // The recent 6000 fixes are all in the resolved cell; the old fix must
+        // still surface as pending. A recent-window scan (<6000 rows) would
+        // miss it. (The shared fixture also has fixes at -33.8,151.2, which are
+        // likewise unresolved, so just assert the old cell is included.)
+        let pending = db.pending_geocode_coords(4, 50, 0).await.unwrap();
+        assert!(
+            pending.contains(&("-37.8000".to_string(), "144.9000".to_string())),
+            "old unresolved cell must be reached, got {pending:?}"
+        );
+        // The resolved recent cell must NOT be returned.
+        assert!(!pending.contains(&("-37.9846".to_string(), "145.0748".to_string())));
     }
 }
