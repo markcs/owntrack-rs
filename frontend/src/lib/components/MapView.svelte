@@ -19,11 +19,19 @@
 
     let { curTrack, trackpoints, positionsUrl, setCurTrack } = $props();
 
+    // How often the live positions source is re-fetched, in milliseconds.
+    const REFRESH_MS = 20_000;
+
     let map = $state.raw();
     let positions_source = $state.raw();
     let hoveredPositionFeat = $state.raw();
     let hoveredPointFeat = $state.raw();
     let lnglat = $state.raw(new maplibregl.LngLat(0, 0));
+
+    // Whether the map should keep the selected device centred as live
+    // positions refresh. Engaged whenever a device is (re)selected and the
+    // live view is active; paused when the user pans or zooms by hand.
+    let following = $state(false);
 
     // Zoom to the selected track's points.
     $effect(() => {
@@ -40,6 +48,82 @@
                     map.fitBounds(new LngLatBounds(data.bbox), { padding: 40 });
                 }
             });
+        }
+    });
+
+    // Re-engage following whenever a device is (re)selected while the live
+    // view is active. A static historical track (no positionsUrl) has nothing
+    // to follow, so leave following off then.
+    $effect(() => {
+        if (curTrack && positionsUrl) {
+            following = true;
+        } else {
+            following = false;
+        }
+    });
+
+    // Pan the map to the selected device's latest live position. Pan only
+    // (easeTo with centre), so the user's chosen zoom level is preserved.
+    function followSelected(data) {
+        if (!following || !map || !curTrack || !data) return;
+        const feat = data.features?.find(
+            (f) => f.properties?.device_id === curTrack.device_id,
+        );
+        const coords = feat?.geometry?.coordinates;
+        if (coords) {
+            map.easeTo({ center: coords, duration: 1000 });
+        }
+    }
+
+    // A manual pan or zoom pauses following until a device is (re)selected.
+    // Programmatic moves (easeTo/fitBounds) carry no originalEvent, so they
+    // are ignored here.
+    function onUserMove(ev) {
+        if (ev && ev.originalEvent) following = false;
+    }
+
+    // Attach manual-interaction listeners once the map exists. Also follow the
+    // selected device whenever the live-positions source finishes (re)loading,
+    // so a freshly fetched position is centred as soon as it arrives.
+    $effect(() => {
+        if (!map) return;
+        const onSourceData = (ev) => {
+            if (ev.sourceId === "positions" && ev.isSourceLoaded) {
+                positions_source?.getData().then(followSelected);
+            }
+        };
+        map.on("dragstart", onUserMove);
+        map.on("zoomstart", onUserMove);
+        map.on("rotatestart", onUserMove);
+        map.on("sourcedata", onSourceData);
+        return () => {
+            map.off("dragstart", onUserMove);
+            map.off("zoomstart", onUserMove);
+            map.off("rotatestart", onUserMove);
+            map.off("sourcedata", onSourceData);
+        };
+    });
+
+    // Periodically re-fetch the live positions source so markers move in the
+    // background. Following happens via the sourcedata handler once the new
+    // data has loaded.
+    $effect(() => {
+        if (!positionsUrl || !positions_source) return;
+        const url = positionsUrl;
+        const timer = setInterval(() => {
+            positions_source.setData(url);
+        }, REFRESH_MS);
+        return () => clearInterval(timer);
+    });
+
+    // When a device is (re)selected, centre on it immediately using whatever
+    // live data is already loaded. Depends on curTrack so switching device
+    // while following re-centres too.
+    $effect(() => {
+        // Reference curTrack so this effect re-runs when the selection changes.
+        void curTrack;
+        if (following && positions_source) {
+            positions_source.getData().then(followSelected);
         }
     });
 
@@ -125,7 +209,11 @@
     {/if}
 
     {#if positionsUrl}
-        <GeoJSONSource data={positionsUrl} bind:source={positions_source}>
+        <GeoJSONSource
+            id="positions"
+            data={positionsUrl}
+            bind:source={positions_source}
+        >
             <SymbolLayer
                 layout={{
                     "icon-image": [
