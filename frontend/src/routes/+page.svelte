@@ -35,6 +35,9 @@
     let preselectDeviceId = $state(init.deviceId);
     let curTrack = $state(null);
     let trackpoints = $state(null);
+    // Properties of a track point the user clicked on the map, shown in the
+    // Track details panel. Cleared whenever the selected track changes.
+    let selectedPoint = $state(null);
 
     // Live positions only make sense for today.
     let positionsUrl = $derived(
@@ -48,8 +51,65 @@
     let statsOpen = $state(true);
 
     const setDate = (d) => (date = d);
-    const setCurTrack = (t) => (curTrack = t);
+    const setCurTrack = (t) => {
+        curTrack = t;
+        // A new (or cleared) track invalidates any point selected on the map.
+        selectedPoint = null;
+    };
     const setTrackpoints = (t) => (trackpoints = t);
+    const setSelectedPoint = (p) => {
+        selectedPoint = p;
+        // Make sure the details panel is visible on mobile when a point is
+        // picked, so the information the user asked for is not hidden.
+        if (p) statsOpen = true;
+    };
+    const clearSelectedPoint = () => (selectedPoint = null);
+
+    // --- Resizable side panels -------------------------------------------
+    // The sidebar holds two stacked panels (Tracks, Track details). A drag
+    // handle between them sets the Tracks panel height; the details panel
+    // takes the remaining space. The value is a pixel height, clamped on drag
+    // and persisted so the user's preferred split survives reloads.
+    const LIST_H_KEY = "viewer.listHeight";
+    const MIN_PANEL_H = 120;
+    let listHeight = $state(null); // null = use default flex sizing
+    let sideEl = $state.raw();
+    let dragging = $state(false);
+
+    $effect(() => {
+        if (!browser) return;
+        const saved = Number(localStorage.getItem(LIST_H_KEY));
+        if (Number.isFinite(saved) && saved >= MIN_PANEL_H) listHeight = saved;
+    });
+
+    function clampListHeight(px) {
+        if (!sideEl) return px;
+        // Leave room for the details panel (min height + the handle + gap).
+        const max = sideEl.clientHeight - MIN_PANEL_H - 24;
+        return Math.max(MIN_PANEL_H, Math.min(px, Math.max(MIN_PANEL_H, max)));
+    }
+
+    function onDragMove(ev) {
+        if (!dragging || !sideEl) return;
+        const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        const top = sideEl.getBoundingClientRect().top;
+        listHeight = clampListHeight(clientY - top);
+        ev.preventDefault();
+    }
+    function onDragEnd() {
+        if (!dragging) return;
+        dragging = false;
+        if (browser && listHeight != null)
+            localStorage.setItem(LIST_H_KEY, String(Math.round(listHeight)));
+        window.removeEventListener("pointermove", onDragMove);
+        window.removeEventListener("pointerup", onDragEnd);
+    }
+    function startDrag(ev) {
+        dragging = true;
+        window.addEventListener("pointermove", onDragMove);
+        window.addEventListener("pointerup", onDragEnd);
+        ev.preventDefault();
+    }
 
     // The most recently received position, shown as a "last seen" label with
     // its resolved address. Refreshed periodically so an address that the
@@ -74,7 +134,13 @@
 
 <div class="viewer">
     <section class="map-pane card">
-        <MapView {curTrack} {trackpoints} {positionsUrl} {setCurTrack} />
+        <MapView
+            {curTrack}
+            {trackpoints}
+            {positionsUrl}
+            {setCurTrack}
+            {setSelectedPoint}
+        />
         {#if latestPosition}
             <div class="latest-badge" title={latestPosition.ts}>
                 <span class="latest-label">Last seen</span>
@@ -91,8 +157,13 @@
         {/if}
     </section>
 
-    <aside class="side">
-        <section class="card panel">
+    <aside class="side" bind:this={sideEl} class:dragging>
+        <section
+            class="card panel list-panel"
+            style={listHeight != null && listOpen
+                ? `flex: 0 0 ${listHeight}px`
+                : undefined}
+        >
             <button
                 class="panel-head"
                 aria-expanded={listOpen}
@@ -112,7 +183,19 @@
             </div>
         </section>
 
-        <section class="card panel">
+        <div
+            class="resizer"
+            class:hidden={!listOpen || !statsOpen}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize panels"
+            onpointerdown={startDrag}
+            ontouchstart={startDrag}
+        >
+            <span class="grip"></span>
+        </div>
+
+        <section class="card panel stats-panel">
             <button
                 class="panel-head"
                 aria-expanded={statsOpen}
@@ -121,8 +204,13 @@
                 <h2>Track details</h2>
                 <span class="caret" class:open={statsOpen}>▾</span>
             </button>
-            <div class="panel-body" class:collapsed={!statsOpen}>
-                <TrackStats {curTrack} {setTrackpoints} />
+            <div class="panel-body stats-body" class:collapsed={!statsOpen}>
+                <TrackStats
+                    {curTrack}
+                    {setTrackpoints}
+                    {selectedPoint}
+                    {clearSelectedPoint}
+                />
             </div>
         </section>
     </aside>
@@ -178,8 +266,12 @@
         grid-row: 1 / span 2;
         display: flex;
         flex-direction: column;
-        gap: var(--sp-4);
+        gap: 0;
         min-height: 0;
+    }
+    .side.dragging {
+        cursor: row-resize;
+        user-select: none;
     }
 
     .panel {
@@ -187,9 +279,16 @@
         flex-direction: column;
         min-height: 0;
         padding: 0;
+        overflow: hidden;
     }
-    .panel:first-child {
-        flex: 1;
+    /* By default the Tracks panel flexes and the details panel takes what it
+       needs; a drag on the resizer overrides this with an explicit height. */
+    .list-panel {
+        flex: 1 1 auto;
+    }
+    .stats-panel {
+        flex: 1 1 auto;
+        margin-top: var(--sp-3);
     }
     .panel-head {
         display: flex;
@@ -199,8 +298,9 @@
         background: transparent;
         border: none;
         cursor: pointer;
-        padding: var(--sp-4);
+        padding: var(--sp-3) var(--sp-4);
         font: inherit;
+        flex: none;
     }
     .panel-head h2 {
         font-size: var(--fs-lg);
@@ -221,6 +321,35 @@
         display: flex;
         flex-direction: column;
     }
+    .stats-body {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    /* Drag handle between the two stacked panels. */
+    .resizer {
+        flex: none;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: row-resize;
+        touch-action: none;
+    }
+    .resizer.hidden {
+        display: none;
+    }
+    .grip {
+        width: 44px;
+        height: 4px;
+        border-radius: var(--r-pill);
+        background: var(--c-border-strong);
+        transition: background-color 0.15s ease;
+    }
+    .resizer:hover .grip,
+    .side.dragging .grip {
+        background: var(--c-accent);
+    }
 
     /* On desktop the panels are always expanded; the collapse toggle is a
        mobile affordance. */
@@ -230,16 +359,36 @@
             flex-direction: column;
             height: auto;
             min-height: calc(100vh - var(--app-bar-h));
+            padding: var(--sp-3);
+            gap: var(--sp-3);
         }
         .map-pane {
             height: 55vh;
             flex: none;
         }
-        .panel:first-child {
+        .side {
+            /* Let the panels size to content on mobile; the whole page
+               scrolls rather than each panel individually. */
+            display: flex;
+            flex-direction: column;
+            gap: var(--sp-3);
+        }
+        .list-panel,
+        .stats-panel {
             flex: none;
+            /* Ignore any dragged desktop height on mobile. */
+            height: auto !important;
+            margin-top: 0;
         }
         .list-body {
-            max-height: 50vh;
+            max-height: 45vh;
+        }
+        .stats-body {
+            max-height: 55vh;
+        }
+        /* Resizing is a desktop affordance; the page scrolls on mobile. */
+        .resizer {
+            display: none;
         }
         .panel-body.collapsed {
             display: none;

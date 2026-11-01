@@ -114,7 +114,8 @@
                         {#each tracks as track (trackKey(track))}
                             <tr
                                 class:selected={isSelected(track)}
-                                onclick={() => setCurTrack(track)}
+                                onclick={() =>
+                                    setCurTrack(isSelected(track) ? null : track)}
                             >
                                 <td>{track.user_id}</td>
                                 <td>{track.device}</td>

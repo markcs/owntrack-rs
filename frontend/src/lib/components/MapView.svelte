@@ -17,7 +17,8 @@
 
     const { LngLatBounds } = maplibregl;
 
-    let { curTrack, trackpoints, positionsUrl, setCurTrack } = $props();
+    let { curTrack, trackpoints, positionsUrl, setCurTrack, setSelectedPoint } =
+        $props();
 
     // How often the live positions source is re-fetched, in milliseconds.
     const REFRESH_MS = 20_000;
@@ -211,12 +212,26 @@
     {#if trackpoints}
         <GeoJSONSource data={trackpoints}>
             <CircleLayer
-                paint={{ "circle-color": "#0e9488", "circle-radius": 5 }}
+                paint={{
+                    "circle-color": [
+                        "case",
+                        ["boolean", ["feature-state", "hover"], false],
+                        "#0b7a70",
+                        "#0e9488",
+                    ],
+                    "circle-radius": 5,
+                }}
                 onmousemove={(ev) => {
                     hoveredPointFeat = ev.features[0];
                     lnglat = ev.lngLat;
+                    if (map) map.getCanvas().style.cursor = "pointer";
                 }}
-                onmouseout={() => (hoveredPointFeat = undefined)}
+                onmouseout={() => {
+                    hoveredPointFeat = undefined;
+                    if (map) map.getCanvas().style.cursor = "";
+                }}
+                onclick={(ev) =>
+                    setSelectedPoint?.(ev.features[0]?.properties ?? null)}
                 minzoom={11}
             />
             {#if hoveredPointFeat}
