@@ -14,6 +14,7 @@
     import maplibregl from "maplibre-gl";
     import "maplibre-gl/dist/maplibre-gl.css";
     import { trackGeoJsonUrl } from "$lib/api.js";
+    import { utcToLocalDate, utcToLocalTime } from "$lib/datetime.js";
 
     const { LngLatBounds } = maplibregl;
 
@@ -164,6 +165,12 @@
                 // popup stays readable while geocoding is still catching up.
                 if (p === "address" || v === null || v === undefined || v === "")
                     continue;
+                // `time` is a UTC timestamp from the API; show it in the
+                // browser's local time rather than the raw UTC string.
+                if (p === "time") {
+                    str += `time: ${utcToLocalDate(v)} ${utcToLocalTime(v)}<br/>`;
+                    continue;
+                }
                 str += `${p}: ${v}<br/>`;
             }
         }
