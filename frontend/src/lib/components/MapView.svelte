@@ -211,6 +211,9 @@
 
     {#if trackpoints}
         <GeoJSONSource data={trackpoints}>
+            <!-- Visible dots. Purely cosmetic: interaction is handled by the
+                 transparent hit layer below, so a finger tap does not have to
+                 land on the 5px dot itself. -->
             <CircleLayer
                 paint={{
                     "circle-color": [
@@ -220,6 +223,18 @@
                         "#0e9488",
                     ],
                     "circle-radius": 5,
+                }}
+                minzoom={11}
+            />
+            <!-- Enlarged transparent hit target. A 5px dot is far smaller than
+                 a fingertip (~44px), which made points effectively unselectable
+                 on touch devices. This invisible circle gives a generous tap
+                 area and carries the hover/click/touch handlers. -->
+            <CircleLayer
+                paint={{
+                    "circle-color": "#000000",
+                    "circle-opacity": 0,
+                    "circle-radius": 16,
                 }}
                 onmousemove={(ev) => {
                     hoveredPointFeat = ev.features[0];
@@ -232,6 +247,8 @@
                 }}
                 onclick={(ev) =>
                     setSelectedPoint?.(ev.features[0]?.properties ?? null)}
+                ontouchend={(ev) =>
+                    setSelectedPoint?.(ev.features?.[0]?.properties ?? null)}
                 minzoom={11}
             />
             {#if hoveredPointFeat}

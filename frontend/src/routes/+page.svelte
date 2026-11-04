@@ -3,7 +3,13 @@
     import MapView from "$lib/components/MapView.svelte";
     import TrackList from "$lib/components/TrackList.svelte";
     import TrackStats from "$lib/components/TrackStats.svelte";
-    import { isoDateString, isToday, utcOffsetMinutes } from "$lib/datetime.js";
+    import {
+        isoDateString,
+        isToday,
+        utcOffsetMinutes,
+        utcToLocalDate,
+        utcToLocalTime,
+    } from "$lib/datetime.js";
     import {
         positionsUrl as positionsUrlFn,
         fetchLatestPosition,
@@ -38,6 +44,11 @@
     // Properties of a track point the user clicked on the map, shown in the
     // Track details panel. Cleared whenever the selected track changes.
     let selectedPoint = $state(null);
+    // Whether `selectedPoint` was chosen explicitly by the user (map click)
+    // rather than defaulted to the latest point. A user pick is kept as-is;
+    // an auto-default is replaced as fresher points arrive. Reset whenever the
+    // selected track changes or the selection is cleared.
+    let userPickedPoint = $state(false);
 
     // Live positions only make sense for today.
     let positionsUrl = $derived(
@@ -55,15 +66,41 @@
         curTrack = t;
         // A new (or cleared) track invalidates any point selected on the map.
         selectedPoint = null;
+        userPickedPoint = false;
     };
     const setTrackpoints = (t) => (trackpoints = t);
     const setSelectedPoint = (p) => {
         selectedPoint = p;
+        // A click selects a specific point; a null clears it. Either way this
+        // is an explicit user action, so stop auto-defaulting to the latest.
+        userPickedPoint = p != null;
         // Make sure the details panel is visible on mobile when a point is
         // picked, so the information the user asked for is not hidden.
         if (p) statsOpen = true;
     };
-    const clearSelectedPoint = () => (selectedPoint = null);
+    const clearSelectedPoint = () => {
+        selectedPoint = null;
+        userPickedPoint = false;
+    };
+
+    // Latest point of the currently loaded track, i.e. the last feature in the
+    // GeoJSON FeatureCollection (points are returned in chronological order).
+    function latestTrackPoint(tp) {
+        const feats = tp && tp.features;
+        if (!Array.isArray(feats) || feats.length === 0) return null;
+        return feats[feats.length - 1]?.properties ?? null;
+    }
+
+    // When a device is selected for today, default the Point details to the
+    // latest point unless the user has explicitly picked one. The default
+    // follows fresh points as the track grows (live view); once the user picks
+    // a point, we leave their choice alone until the track or date changes.
+    $effect(() => {
+        if (userPickedPoint) return;
+        if (!curTrack || !isToday(date)) return;
+        const latest = latestTrackPoint(trackpoints);
+        if (latest) selectedPoint = latest;
+    });
 
     // --- Resizable side panels -------------------------------------------
     // The sidebar holds two stacked panels (Tracks, Track details). A drag
@@ -142,7 +179,10 @@
             {setSelectedPoint}
         />
         {#if latestPosition}
-            <div class="latest-badge" title={latestPosition.ts}>
+            <div
+                class="latest-badge"
+                title={`${utcToLocalDate(latestPosition.ts)} ${utcToLocalTime(latestPosition.ts)}`}
+            >
                 <span class="latest-label">Last seen</span>
                 {#if latestPosition.address}
                     <span class="latest-addr">{latestPosition.address}</span>
